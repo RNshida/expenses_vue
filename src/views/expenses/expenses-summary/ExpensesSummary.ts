@@ -7,6 +7,8 @@ import {
   CategoryScale,
   Tooltip,
   Legend,
+  PieController,
+  ArcElement,
   type Scale,
 } from 'chart.js'
 import { storeToRefs } from 'pinia'
@@ -23,11 +25,16 @@ const getBaselinePixel = (ctx: AnimCtx): number =>
 
 const getAnimDelay = (ctx: AnimCtx): number => (ctx.dataIndex ?? 0) * 60
 
-Chart.register(BarController, BarElement, LinearScale, CategoryScale, Tooltip, Legend)
+Chart.register(BarController, BarElement, LinearScale, CategoryScale, Tooltip, Legend, PieController, ArcElement)
 
 const FALLBACK_COLORS = [
   '#1e3a6e', '#4169b0', '#8fa8d8', '#6b5fa5',
   '#a08fd8', '#3b82c4', '#5b9bd5', '#2d6a9f',
+]
+
+const PIE_COLORS = [
+  '#4169b0', '#59a14f', '#e15759', '#f28e2b',
+  '#76b7b2', '#edc948', '#b07aa1', '#ff9da7',
 ]
 
 function computeUnit(maxVal: number): { label: string; divisor: number } {
@@ -37,7 +44,6 @@ function computeUnit(maxVal: number): { label: string; divisor: number } {
   return { label: '兆円', divisor: 1_000_000_000_000 }
 }
 
-// y軸が非表示でもグリッド線をバーの背面に描画するプラグイン
 const gridPlugin = {
   id: 'customGrid',
   beforeDatasetsDraw(chart: Chart) {
@@ -67,6 +73,8 @@ export function useExpensesSummary() {
   const selectedTab = ref<number>(0)
   const chartInstance = ref<Chart | null>(null)
   const chartCanvas = ref<HTMLCanvasElement | null>(null)
+  const pieChartInstance = ref<Chart | null>(null)
+  const pieChartCanvas = ref<HTMLCanvasElement | null>(null)
   const canvasKey = ref(0)
   const currentUnit = ref('円')
   const axisTicks = ref<{ value: number; y: number; label: string }[]>([])
@@ -90,27 +98,30 @@ export function useExpensesSummary() {
       }))
   )
 
-  // 残高カード用: 合計シリーズの最新月・前月
   const totalSeries = computed(() =>
     summary.value.series.find((s) => s.categoryId === 0),
   )
 
-  const currentMonthTotal = computed(() => {
+  const effectiveLatestIndex = computed(() => {
     const amounts = totalSeries.value?.amounts ?? []
     for (let i = amounts.length - 1; i >= 0; i--) {
-      if (amounts[i] !== null) return amounts[i] as number
+      if (amounts[i] !== null && (amounts[i] as number) !== 0) return i
     }
-    return null
+    return -1
+  })
+
+  const currentMonthTotal = computed(() => {
+    const idx = effectiveLatestIndex.value
+    if (idx === -1) return null
+    return totalSeries.value!.amounts[idx] as number
   })
 
   const prevMonthTotal = computed(() => {
+    const idx = effectiveLatestIndex.value
+    if (idx === -1) return null
     const amounts = totalSeries.value?.amounts ?? []
-    let found = false
-    for (let i = amounts.length - 1; i >= 0; i--) {
-      if (amounts[i] !== null) {
-        if (found) return amounts[i] as number
-        found = true
-      }
+    for (let i = idx - 1; i >= 0; i--) {
+      if (amounts[i] !== null) return amounts[i] as number
     }
     return null
   })
@@ -120,36 +131,87 @@ export function useExpensesSummary() {
     return currentMonthTotal.value - prevMonthTotal.value
   })
 
-  // 月ラベルの色: 目標が全達成→青, 未達あり→赤, 目標なし→デフォルト
-  const getMonthLabelColor = (monthLabel: string): string => {
-    const goals = goalStore.goals.filter(
-      (g) => g.targetAmount !== null && g.targetAmount > 0,
-    )
-    if (goals.length === 0) return '#888'
+  // 最新月の種別別残高（円グラフ用）
+  const typePieData = computed(() => {
+    const amounts = totalSeries.value?.amounts ?? []
+    let latestIdx = -1
+    for (let i = amounts.length - 1; i >= 0; i--) {
+      if (amounts[i] !== null) { latestIdx = i; break }
+    }
+    if (latestIdx === -1) return []
 
-    const monthIndex = summary.value.months.indexOf(monthLabel)
-    if (monthIndex === -1) return '#888'
-
-    let anyApplicable = false
-    let allMet = true
-
-    for (const goal of goals) {
-      const s = summary.value.series.find((s) => s.categoryId === goal.categoryId)
-      if (!s) continue
-      const amount = s.amounts[monthIndex]
-      if (amount === null) continue
-      anyApplicable = true
-      if ((amount as number) < (goal.targetAmount as number)) {
-        allMet = false
-        break
+    const typeMap = new Map<number, { typeName: string; amount: number; colorIndex: number }>()
+    let colorIdx = 0
+    for (const cat of store.categories) {
+      if (cat.categoryTypeId === null || cat.categoryTypeName === null) continue
+      const s = summary.value.series.find((ser) => ser.categoryId === cat.id)
+      const amount = s ? ((s.amounts[latestIdx] as number) ?? 0) : 0
+      if (!typeMap.has(cat.categoryTypeId)) {
+        typeMap.set(cat.categoryTypeId, { typeName: cat.categoryTypeName, amount: 0, colorIndex: colorIdx++ })
       }
+      typeMap.get(cat.categoryTypeId)!.amount += amount
     }
 
-    if (!anyApplicable) return '#888'
-    return allMet ? '#3b82f6' : '#ef4444'
+    return Array.from(typeMap.entries())
+      .filter(([, v]) => v.amount > 0)
+      .map(([typeId, v]) => ({
+        typeId,
+        typeName: v.typeName,
+        amount: v.amount,
+        color: PIE_COLORS[v.colorIndex % PIE_COLORS.length],
+      }))
+  })
+
+  // 種別目標の達成状況を月インデックスで返す（期間ベース）
+  const getTypeGoalStatus = (monthIndex: number): 'met' | 'unmet' | 'none' => {
+    const monthLabel = summary.value.months[monthIndex]
+    if (!monthLabel) return 'none'
+
+    let anyApplicable = false
+    for (const item of goalStore.typeGoalPeriods) {
+      const period = item.periods.find(
+        (p) =>
+          (!p.startYearMonth || p.startYearMonth <= monthLabel) &&
+          (!p.endYearMonth || monthLabel <= p.endYearMonth),
+      )
+      if (!period || period.targetAmount <= 0) continue
+
+      const typeCategories = store.categories.filter((c) => c.categoryTypeId === item.categoryTypeId)
+      const typeHasDataInPeriod = typeCategories.some((c) =>
+        summary.value.series.some((s) => s.categoryId === c.id),
+      )
+      if (!typeHasDataInPeriod) continue
+      anyApplicable = true
+
+      const typeSeries = summary.value.series.filter((s) =>
+        typeCategories.some((c) => c.id === s.categoryId),
+      )
+      const currentTotal = typeSeries.reduce((sum, s) => {
+        const a = s.amounts[monthIndex]
+        return sum + (a !== null && a !== undefined ? (a as number) : 0)
+      }, 0)
+      const prevTotal = monthIndex > 0
+        ? typeSeries.reduce((sum, s) => {
+            const a = s.amounts[monthIndex - 1]
+            return sum + (a !== null && a !== undefined ? (a as number) : 0)
+          }, 0)
+        : 0
+      const diff = currentTotal - prevTotal
+      if (diff < period.targetAmount) return 'unmet'
+    }
+
+    return anyApplicable ? 'met' : 'none'
   }
 
-  // 横スクロール用: 月数に応じた最小幅（1月あたり45px）
+  const getMonthLabelColor = (monthLabel: string): string => {
+    const monthIndex = summary.value.months.indexOf(monthLabel)
+    if (monthIndex === -1) return '#888'
+    const status = getTypeGoalStatus(monthIndex)
+    if (status === 'met') return '#3b82f6'
+    if (status === 'unmet') return '#ef4444'
+    return '#888'
+  }
+
   const chartMinWidth = computed(() =>
     Math.max(summary.value.months.length * 45, 260),
   )
@@ -159,7 +221,6 @@ export function useExpensesSummary() {
     return cat?.color || FALLBACK_COLORS[fallbackIndex % FALLBACK_COLORS.length]
   }
 
-  // チャートのy軸tick情報をHTMLオーバーレイ用に更新するプラグイン
   const axisTickSyncPlugin = {
     id: 'axisTickSync',
     afterUpdate(chart: Chart) {
@@ -173,6 +234,90 @@ export function useExpensesSummary() {
           label: Math.round(t.value as number).toLocaleString('ja-JP'),
         }))
     },
+  }
+
+  const getPieTooltipEl = (): HTMLDivElement => {
+    let el = document.getElementById('pie-tooltip') as HTMLDivElement | null
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'pie-tooltip'
+      el.style.cssText = [
+        'position:fixed',
+        'pointer-events:none',
+        'background:rgba(0,0,0,0.75)',
+        'color:#fff',
+        'border-radius:6px',
+        'padding:6px 10px',
+        'font-size:13px',
+        'white-space:nowrap',
+        'z-index:9999',
+        'transition:opacity 0.1s',
+        'opacity:0',
+      ].join(';')
+      document.body.appendChild(el)
+    }
+    return el
+  }
+
+  const pieExternalTooltip = (context: { chart: Chart; tooltip: { opacity: number; caretX: number; caretY: number; body: { lines: string[] }[] } }) => {
+    const { chart, tooltip } = context
+    const el = getPieTooltipEl()
+    if (tooltip.opacity === 0) {
+      el.style.opacity = '0'
+      return
+    }
+    const lines = tooltip.body?.flatMap((b) => b.lines) ?? []
+    el.innerHTML = lines.map((l) => `<div>${l}</div>`).join('')
+
+    const rect = chart.canvas.getBoundingClientRect()
+    const x = rect.left + tooltip.caretX
+    const y = rect.top + tooltip.caretY
+
+    el.style.opacity = '1'
+    el.style.left = `${x + 12}px`
+    el.style.top = `${y - 12}px`
+
+    const elRect = el.getBoundingClientRect()
+    if (elRect.right > window.innerWidth) {
+      el.style.left = `${x - elRect.width - 12}px`
+    }
+    if (elRect.bottom > window.innerHeight) {
+      el.style.top = `${y - elRect.height + 12}px`
+    }
+  }
+
+  const renderPieChart = () => {
+    pieChartInstance.value?.destroy()
+    pieChartInstance.value = null
+    const canvas = pieChartCanvas.value
+    if (!canvas) return
+    const data = typePieData.value
+    if (data.length === 0) return
+
+    pieChartInstance.value = new Chart(canvas, {
+      type: 'pie',
+      data: {
+        labels: data.map((d) => d.typeName),
+        datasets: [{
+          data: data.map((d) => d.amount),
+          backgroundColor: data.map((d) => d.color),
+          borderWidth: 2,
+          borderColor: '#fff',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            enabled: false,
+            external: pieExternalTooltip as never,
+          },
+        },
+      },
+    })
   }
 
   const renderChart = () => {
@@ -189,7 +334,6 @@ export function useExpensesSummary() {
     const categorySeries = series.filter((s) => s.categoryId !== 0)
     const isStacked = selectedTab.value === 0
 
-    // データの最大値を算出して単位を決定
     let dataMax = 0
     if (isStacked) {
       for (let i = 0; i < months.length; i++) {
@@ -204,7 +348,6 @@ export function useExpensesSummary() {
     const { label: unit, divisor } = computeUnit(dataMax)
     currentUnit.value = unit
 
-    // データをスケーリング
     let datasets
     if (isStacked) {
       datasets = categorySeries.map((item, index) => ({
@@ -228,7 +371,6 @@ export function useExpensesSummary() {
       }]
     }
 
-    // メインチャート（y軸非表示、グリッド線とtick同期はプラグインで処理）
     chartInstance.value = new Chart(canvas, {
       type: 'bar',
       data: { labels: months, datasets },
@@ -250,6 +392,14 @@ export function useExpensesSummary() {
                 const original = Math.round((ctx.parsed.y ?? 0) * divisor)
                 return `${ctx.dataset.label}: ¥${original.toLocaleString('ja-JP')}`
               },
+              footer: (items) => {
+                if (items.length <= 1) return ''
+                const total = items.reduce(
+                  (sum, item) => sum + Math.round((item.parsed.y ?? 0) * divisor),
+                  0,
+                )
+                return `合計: ¥${total.toLocaleString('ja-JP')}`
+              },
             },
           },
         },
@@ -265,7 +415,7 @@ export function useExpensesSummary() {
             border: { display: false },
           },
           y: {
-            display: false, // 非表示（スケール・tick計算は行われる）
+            display: false,
             stacked: isStacked,
             beginAtZero: true,
             ticks: { count: 10 },
@@ -280,6 +430,7 @@ export function useExpensesSummary() {
     canvasKey.value++
     await nextTick()
     renderChart()
+    renderPieChart()
   }
 
   const loadData = async () => {
@@ -290,7 +441,7 @@ export function useExpensesSummary() {
       await Promise.all([
         store.fetchSummary(selectedPeriod.value),
         store.fetchCategories(),
-        goalStore.fetchGoals(),
+        goalStore.fetchTypeGoalPeriods(),
       ])
     } catch (e) {
       errorMessage.value = e instanceof Error ? e.message : 'データの取得に失敗しました'
@@ -300,6 +451,7 @@ export function useExpensesSummary() {
     if (!errorMessage.value) {
       await nextTick()
       renderChart()
+      renderPieChart()
     }
   }
 
@@ -313,6 +465,8 @@ export function useExpensesSummary() {
 
   onUnmounted(() => {
     chartInstance.value?.destroy()
+    pieChartInstance.value?.destroy()
+    document.getElementById('pie-tooltip')?.remove()
   })
 
   return {
@@ -326,11 +480,13 @@ export function useExpensesSummary() {
     errorMessage,
     summary,
     chartCanvas,
+    pieChartCanvas,
     canvasKey,
     chartMinWidth,
     currentMonthTotal,
     prevMonthTotal,
     monthDiff,
+    typePieData,
     onPeriodChange,
     onTabChange,
   }

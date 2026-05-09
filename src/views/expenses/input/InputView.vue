@@ -64,6 +64,19 @@
           </div>
         </div>
 
+        <!-- 種別合計 -->
+        <div v-if="typeBalanceSummary.length > 0" class="type-totals">
+          <div v-for="t in typeBalanceSummary" :key="t.typeId" class="type-total-row">
+            <span class="type-total-label">{{ t.typeName }}</span>
+            <span class="type-total-amount" :class="t.statusClass">
+              ¥{{ t.total.toLocaleString('ja-JP') }}
+              <span class="type-total-diff" :class="t.diff >= 0 ? 'diff-positive' : 'diff-negative'">
+                {{ t.diff >= 0 ? '+' : '' }}{{ t.diff.toLocaleString('ja-JP') }}
+              </span>
+            </span>
+          </div>
+        </div>
+
         <div class="total-row">
           <span class="total-label">合計</span>
           <span class="total-amount">¥{{ totalAmount.toLocaleString('ja-JP') }}</span>
@@ -72,7 +85,6 @@
         <div v-if="saveSuccessMessage" class="success-message">{{ saveSuccessMessage }}</div>
         <div v-if="saveErrorMessage" class="error-message">{{ saveErrorMessage }}</div>
 
-        <!-- 前月・次月ナビゲーション -->
         <div class="month-nav">
           <button class="month-nav-btn" @click="goToPrevMonth">← 前月へ</button>
           <button class="month-nav-btn" @click="goToNextMonth" :disabled="!canGoNext">
@@ -91,14 +103,12 @@
 
       <div v-if="isLoadingCategories" class="loading">読み込み中...</div>
 
-      <!-- カテゴリ件数表示 -->
       <div v-if="store.categories.length > 0" class="category-count">
         {{ store.categories.length }} / 10 件
         <span v-if="store.categories.length >= 10" class="count-limit">（上限に達しました）</span>
       </div>
 
-      <ul v-else-if="!isLoadingCategories" class="category-list"></ul>
-      <ul class="category-list">
+      <ul v-if="!isLoadingCategories" class="category-list">
         <li
           v-for="(category, index) in store.categories"
           :key="category.id"
@@ -107,7 +117,6 @@
           @dragover.prevent="onDragOver(index)"
           @drop.prevent
         >
-          <!-- ドラッグハンドル（このspanのみdraggable） -->
           <span
             class="drag-handle"
             title="ドラッグして並び替え"
@@ -115,75 +124,57 @@
             @dragstart="onDragStart(index, $event)"
             @dragend="onDragEnd"
           >⠿</span>
-          <!-- カラーピッカー -->
-          <label class="color-picker-label" :title="'色を変更'">
-            <span class="color-swatch" :style="{ background: category.color || '#cccccc' }"></span>
-            <input
-              type="color"
-              class="color-input"
-              :value="category.color || '#cccccc'"
-              @change="onColorChange(category.id, editingCategoryId === category.id ? editingCategoryName : category.name, ($event.target as HTMLInputElement).value)"
-            />
-          </label>
-
-          <!-- カテゴリ名（編集中はinput、それ以外はspan） -->
-          <input
-            v-if="editingCategoryId === category.id"
-            v-model="editingCategoryName"
-            type="text"
-            class="category-name-input"
-            :maxlength="CATEGORY_NAME_MAX"
-            @input="clampCategoryName('editing', $event)"
-            @compositionend="clampCategoryName('editing', $event)"
-            @keyup.enter="saveEditingCategory(category)"
-            @keyup.escape="cancelEditing"
-            @blur="saveEditingCategory(category)"
-          />
-          <span v-else class="category-name">{{ category.name }}</span>
-
-          <!-- 編集ボタン -->
-          <button
-            class="edit-name-btn"
-            @click="startEditing(category)"
-            title="名前を編集"
-          >✎</button>
-
-          <!-- 削除ボタン -->
-          <button
-            class="delete-btn"
-            @click="deleteCategory(category.id)"
-            title="削除"
-          >✕</button>
+          <span class="color-swatch-display" :style="{ background: category.color || '#cccccc' }"></span>
+          <span class="category-name">{{ category.name }}</span>
+          <span v-if="category.categoryTypeName" class="type-badge">{{ category.categoryTypeName }}</span>
+          <button class="edit-name-btn" @click="openEditCategoryModal(category)" title="編集">✎</button>
         </li>
         <li v-if="store.categories.length === 0" class="empty-item">カテゴリがありません</li>
       </ul>
 
-      <!-- カテゴリ追加（10件上限） -->
-      <div v-if="store.categories.length < 10" class="add-category">
-        <label class="color-picker-label" title="色を選択">
-          <span class="color-swatch" :style="{ background: newCategoryColor }"></span>
-          <input type="color" class="color-input" v-model="newCategoryColor" />
-        </label>
-        <input
-          v-model="newCategoryName"
-          type="text"
-          placeholder="カテゴリ名を入力"
-          :maxlength="CATEGORY_NAME_MAX"
-          class="category-input"
-          @input="clampCategoryName('new', $event)"
-          @compositionend="clampCategoryName('new', $event)"
-          @keyup.enter="addCategory"
-        />
-        <button
-          class="add-btn"
-          @click="addCategory"
-          :disabled="!newCategoryName.trim() || isAddingCategory"
-        >
-          {{ isAddingCategory ? '追加中...' : '追加' }}
-        </button>
-      </div>
+      <button
+        v-if="store.categories.length < 10"
+        class="add-category-btn"
+        @click="openAddCategoryModal"
+      >
+        + カテゴリを追加
+      </button>
 
       <div v-if="categoryErrorMessage" class="error-message">{{ categoryErrorMessage }}</div>
+    </section>
+
+    <!-- 種別管理 -->
+    <section class="category-section">
+      <div class="section-title-row">
+        <h2 class="section-title">種別管理</h2>
+        <button class="help-btn" @click="showTypeHelp = true" title="ヘルプ">？</button>
+      </div>
+
+      <ul v-if="!isLoadingCategories" class="category-list">
+        <li
+          v-for="(type, index) in store.categoryTypes"
+          :key="type.id"
+          class="category-item"
+          :class="{ 'is-dragging': typeDragFromIndex === index }"
+          @dragover.prevent="onTypeDragOver(index)"
+          @drop.prevent
+        >
+          <span
+            class="drag-handle"
+            title="ドラッグして並び替え"
+            draggable="true"
+            @dragstart="onTypeDragStart(index, $event)"
+            @dragend="onTypeDragEnd"
+          >⠿</span>
+          <span class="category-name">{{ type.name }}</span>
+          <button class="edit-name-btn" @click="openEditTypeModal(type)" title="編集">✎</button>
+        </li>
+        <li v-if="store.categoryTypes.length === 0" class="empty-item">種別がありません</li>
+      </ul>
+
+      <button class="add-category-btn" @click="openAddTypeModal">+ 種別を追加</button>
+
+      <div v-if="typeErrorMessage" class="error-message">{{ typeErrorMessage }}</div>
     </section>
 
     <!-- 備考モーダル -->
@@ -242,23 +233,251 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- 種別管理ヘルプモーダル -->
+    <Teleport to="body">
+      <div v-if="showTypeHelp" class="modal-overlay" @click.self="showTypeHelp = false">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 class="modal-title">種別管理について</h2>
+            <button class="modal-close" @click="showTypeHelp = false">✕</button>
+          </div>
+          <div class="modal-body">
+            <section class="help-section">
+              <h3>種別とは</h3>
+              <p>カテゴリをグループ化するための分類です。<br />例：「現金」「銀行」「証券」などで口座をまとめられます。</p>
+            </section>
+            <section class="help-section">
+              <h3>種別とカテゴリの関係</h3>
+              <p>各カテゴリに種別を設定することで、サマリー画面では種別ごとの残高割合が円グラフで表示されます。</p>
+            </section>
+            <section class="help-section">
+              <h3>目標設定との連携</h3>
+              <p>目標設定画面で種別ごとに毎月の目標残高を設定できます。<br />種別合計が目標に達した場合は青字、未達の場合は赤字で表示されます。</p>
+            </section>
+            <section class="help-section">
+              <h3>並び替え</h3>
+              <p>種別左端の「⠿」マークをドラッグすると順番を変えられます。</p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- カテゴリ追加モーダル -->
+    <Teleport to="body">
+      <div v-if="showAddCategoryModal" class="modal-overlay" @click.self="closeAddCategoryModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 class="modal-title">カテゴリを追加</h2>
+            <button class="modal-close" @click="closeAddCategoryModal">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label class="form-label">カテゴリ名</label>
+              <input
+                v-model="addCategoryName"
+                type="text"
+                class="form-input"
+                placeholder="カテゴリ名を入力"
+                :maxlength="CATEGORY_NAME_MAX"
+                @keyup.enter="submitAddCategory"
+              />
+            </div>
+            <div class="form-field">
+              <label class="form-label">色</label>
+              <div class="color-row">
+                <label class="color-picker-label" title="色を選択">
+                  <span class="color-swatch" :style="{ background: addCategoryColor }"></span>
+                  <input type="color" class="color-input" v-model="addCategoryColor" />
+                </label>
+                <span class="color-code">{{ addCategoryColor }}</span>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">種別</label>
+              <select v-model="addCategoryTypeId" class="form-select">
+                <option :value="null">なし</option>
+                <option v-for="t in store.categoryTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
+              </select>
+            </div>
+            <div v-if="addCategoryError" class="error-message">{{ addCategoryError }}</div>
+            <div class="modal-actions">
+              <button class="modal-cancel-btn" @click="closeAddCategoryModal">キャンセル</button>
+              <button
+                class="modal-save-btn"
+                @click="submitAddCategory"
+                :disabled="!addCategoryName.trim() || isAddingCategory"
+              >
+                {{ isAddingCategory ? '追加中...' : '保存' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- カテゴリ編集モーダル -->
+    <Teleport to="body">
+      <div v-if="editCategoryTarget" class="modal-overlay" @click.self="closeEditCategoryModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 class="modal-title">カテゴリを編集</h2>
+            <button class="modal-close" @click="closeEditCategoryModal">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label class="form-label">カテゴリ名</label>
+              <input
+                v-model="editCategoryName"
+                type="text"
+                class="form-input"
+                :maxlength="CATEGORY_NAME_MAX"
+              />
+            </div>
+            <div class="form-field">
+              <label class="form-label">色</label>
+              <div class="color-row">
+                <label class="color-picker-label" title="色を選択">
+                  <span class="color-swatch" :style="{ background: editCategoryColor }"></span>
+                  <input type="color" class="color-input" v-model="editCategoryColor" />
+                </label>
+                <span class="color-code">{{ editCategoryColor }}</span>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">種別</label>
+              <select v-model="editCategoryTypeId" class="form-select">
+                <option :value="null">なし</option>
+                <option v-for="t in store.categoryTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
+              </select>
+            </div>
+            <div v-if="editCategoryError" class="error-message">{{ editCategoryError }}</div>
+            <div class="modal-actions">
+              <button class="modal-cancel-btn" @click="closeEditCategoryModal">キャンセル</button>
+              <button
+                class="modal-save-btn"
+                @click="submitEditCategory"
+                :disabled="!editCategoryName.trim() || isSavingCategory"
+              >
+                {{ isSavingCategory ? '保存中...' : '保存' }}
+              </button>
+            </div>
+            <div class="delete-divider"></div>
+            <div v-if="!showDeleteConfirm" class="delete-action">
+              <button class="modal-delete-btn" @click="showDeleteConfirm = true">このカテゴリを削除</button>
+            </div>
+            <div v-else class="delete-confirm">
+              <p class="delete-warn">このカテゴリと関連する残高・目標データがすべて削除されます。本当に削除しますか？</p>
+              <div class="delete-confirm-actions">
+                <button class="modal-cancel-btn" @click="showDeleteConfirm = false">キャンセル</button>
+                <button class="modal-delete-confirm-btn" @click="submitDeleteCategory" :disabled="isDeletingCategory">
+                  {{ isDeletingCategory ? '削除中...' : '削除する' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 種別追加モーダル -->
+    <Teleport to="body">
+      <div v-if="showAddTypeModal" class="modal-overlay" @click.self="closeAddTypeModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 class="modal-title">種別を追加</h2>
+            <button class="modal-close" @click="closeAddTypeModal">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label class="form-label">種別名</label>
+              <input
+                v-model="addTypeName"
+                type="text"
+                class="form-input"
+                placeholder="種別名を入力"
+                :maxlength="TYPE_NAME_MAX"
+                @keyup.enter="submitAddType"
+              />
+            </div>
+            <div v-if="addTypeError" class="error-message">{{ addTypeError }}</div>
+            <div class="modal-actions">
+              <button class="modal-cancel-btn" @click="closeAddTypeModal">キャンセル</button>
+              <button
+                class="modal-save-btn"
+                @click="submitAddType"
+                :disabled="!addTypeName.trim() || isAddingType"
+              >
+                {{ isAddingType ? '追加中...' : '保存' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 種別編集モーダル -->
+    <Teleport to="body">
+      <div v-if="editTypeTarget" class="modal-overlay" @click.self="closeEditTypeModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 class="modal-title">種別を編集</h2>
+            <button class="modal-close" @click="closeEditTypeModal">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label class="form-label">種別名</label>
+              <input
+                v-model="editTypeName"
+                type="text"
+                class="form-input"
+                :maxlength="TYPE_NAME_MAX"
+              />
+            </div>
+            <div v-if="editTypeError" class="error-message">{{ editTypeError }}</div>
+            <div class="modal-actions">
+              <button class="modal-cancel-btn" @click="closeEditTypeModal">キャンセル</button>
+              <button
+                class="modal-save-btn"
+                @click="submitEditType"
+                :disabled="!editTypeName.trim() || isSavingType"
+              >
+                {{ isSavingType ? '保存中...' : '保存' }}
+              </button>
+            </div>
+            <div class="delete-divider"></div>
+            <div v-if="!showTypeDeleteConfirm" class="delete-action">
+              <button class="modal-delete-btn" @click="showTypeDeleteConfirm = true">この種別を削除</button>
+            </div>
+            <div v-else class="delete-confirm">
+              <p class="delete-warn">この種別を削除すると、この種別が設定されているカテゴリの種別がクリアされます。本当に削除しますか？</p>
+              <div class="delete-confirm-actions">
+                <button class="modal-cancel-btn" @click="showTypeDeleteConfirm = false">キャンセル</button>
+                <button class="modal-delete-confirm-btn" @click="submitDeleteType" :disabled="isDeletingType">
+                  {{ isDeletingType ? '削除中...' : '削除する' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script lang="ts">
 import { computed, defineComponent, onMounted, ref } from 'vue'
-import { useBalanceStore, type BalanceInputItem } from '@/stores/balanceStore'
+import { useBalanceStore, type BalanceInputItem, type Category, type CategoryType } from '@/stores/balanceStore'
 import { useGoalStore } from '@/stores/goalStore'
 
 const AMOUNT_MAX = 9999999999999
-
 const FALLBACK_COLORS = [
   '#1e3a6e', '#4169b0', '#8fa8d8', '#6b5fa5',
   '#a08fd8', '#3b82c4', '#5b9bd5', '#2d6a9f',
 ]
-
 const CATEGORY_NAME_MAX = 15
-const CATEGORY_MAX_COUNT = 10
+const TYPE_NAME_MAX = 100
 
 export default defineComponent({
   setup() {
@@ -272,18 +491,76 @@ export default defineComponent({
     const isLoadingBalances = ref(false)
     const isLoadingCategories = ref(false)
     const isAddingCategory = ref(false)
+    const isSavingCategory = ref(false)
+    const isDeletingCategory = ref(false)
+    const isAddingType = ref(false)
+    const isSavingType = ref(false)
+    const isDeletingType = ref(false)
 
     const saveSuccessMessage = ref<string | null>(null)
     const saveErrorMessage = ref<string | null>(null)
     const categoryErrorMessage = ref<string | null>(null)
-    const newCategoryName = ref('')
-    const newCategoryColor = ref(FALLBACK_COLORS[0])
+    const typeErrorMessage = ref<string | null>(null)
+
+    // --- 種別ドラッグ ---
+    const typeDragFromIndex = ref<number | null>(null)
+
+    // --- 種別追加モーダル ---
+    const showAddTypeModal = ref(false)
+    const addTypeName = ref('')
+    const addTypeError = ref<string | null>(null)
+
+    // --- 種別編集モーダル ---
+    const editTypeTarget = ref<CategoryType | null>(null)
+    const editTypeName = ref('')
+    const editTypeError = ref<string | null>(null)
+    const showTypeDeleteConfirm = ref(false)
+
+    // --- カテゴリ追加モーダル ---
+    const showAddCategoryModal = ref(false)
+    const addCategoryName = ref('')
+    const addCategoryColor = ref(FALLBACK_COLORS[0])
+    const addCategoryTypeId = ref<number | null>(null)
+    const addCategoryError = ref<string | null>(null)
+
+    // --- カテゴリ編集モーダル ---
+    const editCategoryTarget = ref<Category | null>(null)
+    const editCategoryName = ref('')
+    const editCategoryColor = ref('#cccccc')
+    const editCategoryTypeId = ref<number | null>(null)
+    const editCategoryError = ref<string | null>(null)
+    const showDeleteConfirm = ref(false)
 
     const totalAmount = computed(() =>
       store.inputBalances.reduce((sum, item) => sum + (item.amount ?? 0), 0),
     )
 
-    // 直近5年分（60ヶ月）の年月オプションを降順で生成
+    // 種別ごとの合計と目標達成状況
+    const typeBalanceSummary = computed(() => {
+      const typeMap = new Map<number, { typeName: string; total: number; prevTotal: number }>()
+      for (const cat of store.categories) {
+        if (cat.categoryTypeId === null || cat.categoryTypeName === null) continue
+        const balance = store.inputBalances.find((b) => b.categoryId === cat.id)
+        const prevBalance = store.prevInputBalances.find((b) => b.categoryId === cat.id)
+        const amount = balance?.amount ?? 0
+        const prevAmount = prevBalance?.amount ?? 0
+        if (!typeMap.has(cat.categoryTypeId)) {
+          typeMap.set(cat.categoryTypeId, { typeName: cat.categoryTypeName, total: 0, prevTotal: 0 })
+        }
+        typeMap.get(cat.categoryTypeId)!.total += amount
+        typeMap.get(cat.categoryTypeId)!.prevTotal += prevAmount
+      }
+      return Array.from(typeMap.entries()).map(([typeId, v]) => {
+        const target = goalStore.getTypeTargetForMonth(typeId, selectedYearMonth.value)
+        const diff = v.total - v.prevTotal
+        let statusClass = ''
+        if (target !== null && target > 0) {
+          statusClass = diff >= target ? 'type-met' : 'type-unmet'
+        }
+        return { typeId, typeName: v.typeName, total: v.total, diff, statusClass }
+      })
+    })
+
     const yearMonthOptions = computed(() => {
       const [curYear, curMonth] = currentYearMonth.split('-').map(Number)
       return Array.from({ length: 60 }, (_, i) => {
@@ -294,7 +571,6 @@ export default defineComponent({
       })
     })
 
-    // 前月・次月の年月文字列を計算
     const prevMonth = computed(() => {
       const [year, month] = selectedYearMonth.value.split('-').map(Number)
       const d = new Date(year, month - 2, 1)
@@ -307,7 +583,6 @@ export default defineComponent({
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     })
 
-    // 次月が現在月を超えない場合のみ遷移可能
     const canGoNext = computed(() => nextMonth.value <= currentYearMonth)
 
     const getCategoryColor = (categoryId: number): string => {
@@ -321,7 +596,10 @@ export default defineComponent({
       saveSuccessMessage.value = null
       saveErrorMessage.value = null
       try {
-        await store.fetchInputBalances(selectedYearMonth.value)
+        await Promise.all([
+          store.fetchInputBalances(selectedYearMonth.value),
+          store.fetchPrevInputBalances(selectedYearMonth.value),
+        ])
       } catch {
         saveErrorMessage.value = '残高データの取得に失敗しました'
       } finally {
@@ -329,30 +607,15 @@ export default defineComponent({
       }
     }
 
-    const onYearMonthChange = () => {
-      loadBalances()
-    }
-
-    const goToPrevMonth = () => {
-      selectedYearMonth.value = prevMonth.value
-      loadBalances()
-    }
-
-    const goToNextMonth = () => {
-      if (!canGoNext.value) return
-      selectedYearMonth.value = nextMonth.value
-      loadBalances()
-    }
+    const onYearMonthChange = () => loadBalances()
+    const goToPrevMonth = () => { selectedYearMonth.value = prevMonth.value; loadBalances() }
+    const goToNextMonth = () => { if (!canGoNext.value) return; selectedYearMonth.value = nextMonth.value; loadBalances() }
 
     const clampAmount = (item: BalanceInputItem, e: Event) => {
       const val = Math.floor(Number((e.target as HTMLInputElement).value))
-      if (isNaN(val) || val < 0) {
-        item.amount = 0
-      } else if (val > AMOUNT_MAX) {
-        item.amount = AMOUNT_MAX
-      } else {
-        item.amount = val
-      }
+      if (isNaN(val) || val < 0) item.amount = 0
+      else if (val > AMOUNT_MAX) item.amount = AMOUNT_MAX
+      else item.amount = val
     }
 
     const onAmountBlur = async (item: BalanceInputItem) => {
@@ -369,28 +632,87 @@ export default defineComponent({
       }
     }
 
-    const addCategory = async () => {
-      const name = newCategoryName.value.trim()
+    // --- カテゴリ追加モーダル ---
+    const openAddCategoryModal = () => {
+      addCategoryName.value = ''
+      addCategoryColor.value = FALLBACK_COLORS[store.categories.length % FALLBACK_COLORS.length]
+      addCategoryTypeId.value = null
+      addCategoryError.value = null
+      showAddCategoryModal.value = true
+    }
+
+    const closeAddCategoryModal = () => {
+      showAddCategoryModal.value = false
+    }
+
+    const submitAddCategory = async () => {
+      const name = addCategoryName.value.trim()
       if (!name) return
       isAddingCategory.value = true
-      categoryErrorMessage.value = null
+      addCategoryError.value = null
       try {
-        await store.addCategory(name, newCategoryColor.value)
-        newCategoryName.value = ''
-        // 次のカテゴリのデフォルト色をローテーション
-        const nextIdx = store.categories.length % FALLBACK_COLORS.length
-        newCategoryColor.value = FALLBACK_COLORS[nextIdx]
+        await store.addCategory(name, addCategoryColor.value, addCategoryTypeId.value)
+        closeAddCategoryModal()
         await loadBalances()
       } catch (e) {
-        categoryErrorMessage.value = e instanceof Error ? e.message : 'カテゴリの追加に失敗しました'
+        addCategoryError.value = e instanceof Error ? e.message : 'カテゴリの追加に失敗しました'
       } finally {
         isAddingCategory.value = false
       }
     }
 
-    // ---- ドラッグ&ドロップによる並び替え ----
-    const showCategoryHelp = ref(false)
+    // --- カテゴリ編集モーダル ---
+    const openEditCategoryModal = (category: Category) => {
+      editCategoryTarget.value = category
+      editCategoryName.value = category.name
+      editCategoryColor.value = category.color || '#cccccc'
+      editCategoryTypeId.value = category.categoryTypeId
+      editCategoryError.value = null
+      showDeleteConfirm.value = false
+    }
 
+    const closeEditCategoryModal = () => {
+      editCategoryTarget.value = null
+      showDeleteConfirm.value = false
+    }
+
+    const submitEditCategory = async () => {
+      const target = editCategoryTarget.value
+      if (!target) return
+      const name = editCategoryName.value.trim()
+      if (!name) return
+      isSavingCategory.value = true
+      editCategoryError.value = null
+      try {
+        await store.updateCategory(target.id, name, editCategoryColor.value, editCategoryTypeId.value)
+        closeEditCategoryModal()
+      } catch (e) {
+        editCategoryError.value = e instanceof Error ? e.message : 'カテゴリの更新に失敗しました'
+      } finally {
+        isSavingCategory.value = false
+      }
+    }
+
+    const submitDeleteCategory = async () => {
+      const target = editCategoryTarget.value
+      if (!target) return
+      isDeletingCategory.value = true
+      categoryErrorMessage.value = null
+      try {
+        await store.deleteCategory(target.id)
+        closeEditCategoryModal()
+        await loadBalances()
+      } catch (e) {
+        categoryErrorMessage.value = e instanceof Error ? e.message : 'カテゴリの削除に失敗しました'
+        closeEditCategoryModal()
+      } finally {
+        isDeletingCategory.value = false
+      }
+    }
+
+    // --- カテゴリドラッグ ---
+    const showCategoryHelp = ref(false)
+    const showTypeHelp = ref(false)
     const dragFromIndex = ref<number | null>(null)
 
     const onDragStart = (index: number, event: DragEvent) => {
@@ -401,21 +723,16 @@ export default defineComponent({
     const onDragOver = (toIndex: number) => {
       const fromIndex = dragFromIndex.value
       if (fromIndex === null || fromIndex === toIndex) return
-
-      // カテゴリリストをその場で並び替えてライブプレビュー
       const cats = store.categories
       const movedCat = cats[fromIndex]
       cats.splice(fromIndex, 1)
       cats.splice(toIndex, 0, movedCat)
-
-      // 残高入力リストも同期（件数が一致している場合のみ）
       const balances = store.inputBalances
       if (balances.length === cats.length) {
         const movedBalance = balances[fromIndex]
         balances.splice(fromIndex, 1)
         balances.splice(toIndex, 0, movedBalance)
       }
-
       dragFromIndex.value = toIndex
     }
 
@@ -427,63 +744,112 @@ export default defineComponent({
         await store.reorderCategories(orders)
       } catch {
         categoryErrorMessage.value = '並び順の保存に失敗しました'
-        // 失敗時は再取得してロールバック
         await store.fetchCategories()
         await loadBalances()
       }
     }
 
-    const onColorChange = async (id: number, name: string, color: string) => {
-      categoryErrorMessage.value = null
+    // --- 種別追加モーダル ---
+    const openAddTypeModal = () => {
+      addTypeName.value = ''
+      addTypeError.value = null
+      showAddTypeModal.value = true
+    }
+
+    const closeAddTypeModal = () => {
+      showAddTypeModal.value = false
+    }
+
+    const submitAddType = async () => {
+      const name = addTypeName.value.trim()
+      if (!name) return
+      isAddingType.value = true
+      addTypeError.value = null
       try {
-        await store.updateCategory(id, name, color)
-      } catch {
-        categoryErrorMessage.value = '色の更新に失敗しました'
-      }
-    }
-
-    // ---- カテゴリ名文字数制限（IME対応） ----
-    const clampCategoryName = (target: 'new' | 'editing', e: Event) => {
-      const val = (e.target as HTMLInputElement).value
-      if (val.length > CATEGORY_NAME_MAX) {
-        const clamped = val.slice(0, CATEGORY_NAME_MAX)
-        if (target === 'new') newCategoryName.value = clamped
-        else editingCategoryName.value = clamped
-        ;(e.target as HTMLInputElement).value = clamped
-      }
-    }
-
-    // ---- カテゴリ名インライン編集 ----
-    const editingCategoryId = ref<number | null>(null)
-    const editingCategoryName = ref('')
-
-    const startEditing = (category: { id: number; name: string }) => {
-      editingCategoryId.value = category.id
-      editingCategoryName.value = category.name
-    }
-
-    const cancelEditing = () => {
-      editingCategoryId.value = null
-      editingCategoryName.value = ''
-    }
-
-    const saveEditingCategory = async (category: { id: number; name: string; color: string | null }) => {
-      const newName = editingCategoryName.value.trim().slice(0, CATEGORY_NAME_MAX)
-      if (!newName || newName === category.name) {
-        cancelEditing()
-        return
-      }
-      categoryErrorMessage.value = null
-      try {
-        await store.updateCategory(category.id, newName, category.color || '#cccccc')
+        await store.addCategoryType(name)
+        closeAddTypeModal()
       } catch (e) {
-        categoryErrorMessage.value = e instanceof Error ? e.message : 'カテゴリ名の更新に失敗しました'
+        addTypeError.value = e instanceof Error ? e.message : '種別の追加に失敗しました'
       } finally {
-        cancelEditing()
+        isAddingType.value = false
       }
     }
 
-    // ---- 備考モーダル ----
+    // --- 種別編集モーダル ---
+    const openEditTypeModal = (type: CategoryType) => {
+      editTypeTarget.value = type
+      editTypeName.value = type.name
+      editTypeError.value = null
+      showTypeDeleteConfirm.value = false
+    }
+
+    const closeEditTypeModal = () => {
+      editTypeTarget.value = null
+      showTypeDeleteConfirm.value = false
+    }
+
+    const submitEditType = async () => {
+      const target = editTypeTarget.value
+      if (!target) return
+      const name = editTypeName.value.trim()
+      if (!name) return
+      isSavingType.value = true
+      editTypeError.value = null
+      try {
+        await store.updateCategoryType(target.id, name)
+        closeEditTypeModal()
+      } catch (e) {
+        editTypeError.value = e instanceof Error ? e.message : '種別の更新に失敗しました'
+      } finally {
+        isSavingType.value = false
+      }
+    }
+
+    const submitDeleteType = async () => {
+      const target = editTypeTarget.value
+      if (!target) return
+      isDeletingType.value = true
+      typeErrorMessage.value = null
+      try {
+        await store.deleteCategoryType(target.id)
+        closeEditTypeModal()
+      } catch (e) {
+        typeErrorMessage.value = e instanceof Error ? e.message : '種別の削除に失敗しました'
+        closeEditTypeModal()
+      } finally {
+        isDeletingType.value = false
+      }
+    }
+
+    // --- 種別ドラッグ ---
+    const onTypeDragStart = (index: number, event: DragEvent) => {
+      typeDragFromIndex.value = index
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+    }
+
+    const onTypeDragOver = (toIndex: number) => {
+      const fromIndex = typeDragFromIndex.value
+      if (fromIndex === null || fromIndex === toIndex) return
+      const types = store.categoryTypes
+      const movedType = types[fromIndex]
+      types.splice(fromIndex, 1)
+      types.splice(toIndex, 0, movedType)
+      typeDragFromIndex.value = toIndex
+    }
+
+    const onTypeDragEnd = async () => {
+      typeDragFromIndex.value = null
+      typeErrorMessage.value = null
+      const orders = store.categoryTypes.map((t, i) => ({ id: t.id, displayOrder: i }))
+      try {
+        await store.reorderCategoryTypes(orders)
+      } catch {
+        typeErrorMessage.value = '並び順の保存に失敗しました'
+        await store.fetchCategoryTypes()
+      }
+    }
+
+    // --- 備考モーダル ---
     const memoModalItem = ref<BalanceInputItem | null>(null)
     const memoModalValue = ref('')
 
@@ -505,18 +871,6 @@ export default defineComponent({
       await onAmountBlur(item)
     }
 
-    const deleteCategory = async (id: number) => {
-      if (!window.confirm('このカテゴリを削除しますか？')) return
-      categoryErrorMessage.value = null
-      try {
-        await store.deleteCategory(id)
-        await loadBalances()
-      } catch (e) {
-        categoryErrorMessage.value = e instanceof Error ? e.message : 'カテゴリの削除に失敗しました'
-      }
-    }
-
-    // 目標達成ボーダークラスを返す
     const getGoalBorderClass = (item: BalanceInputItem): string => {
       const target = goalStore.getTargetAmount(item.categoryId)
       if (target === null || target <= 0) return ''
@@ -529,10 +883,11 @@ export default defineComponent({
       try {
         await Promise.all([
           store.fetchCategories(),
+          store.fetchCategoryTypes(),
           goalStore.fetchGoals(),
+          goalStore.fetchTypeGoalPeriods(),
         ])
         await loadBalances()
-        newCategoryColor.value = FALLBACK_COLORS[store.categories.length % FALLBACK_COLORS.length]
       } finally {
         isLoadingCategories.value = false
       }
@@ -541,17 +896,21 @@ export default defineComponent({
     return {
       store,
       showCategoryHelp,
+      showTypeHelp,
       selectedYearMonth,
       currentYearMonth,
       isLoadingBalances,
       isLoadingCategories,
       isAddingCategory,
+      isSavingCategory,
+      isDeletingCategory,
+      isAddingType,
       saveSuccessMessage,
       saveErrorMessage,
       categoryErrorMessage,
-      newCategoryName,
-      newCategoryColor,
+      typeErrorMessage,
       totalAmount,
+      typeBalanceSummary,
       yearMonthOptions,
       canGoNext,
       getCategoryColor,
@@ -561,20 +920,57 @@ export default defineComponent({
       goToPrevMonth,
       goToNextMonth,
       onAmountBlur,
-      addCategory,
-      onColorChange,
-      deleteCategory,
+      // カテゴリ追加モーダル
+      showAddCategoryModal,
+      addCategoryName,
+      addCategoryColor,
+      addCategoryTypeId,
+      addCategoryError,
+      openAddCategoryModal,
+      closeAddCategoryModal,
+      submitAddCategory,
+      // カテゴリ編集モーダル
+      editCategoryTarget,
+      editCategoryName,
+      editCategoryColor,
+      editCategoryTypeId,
+      editCategoryError,
+      showDeleteConfirm,
+      openEditCategoryModal,
+      closeEditCategoryModal,
+      submitEditCategory,
+      submitDeleteCategory,
+      // カテゴリドラッグ
       dragFromIndex,
       onDragStart,
       onDragOver,
       onDragEnd,
       CATEGORY_NAME_MAX,
-      clampCategoryName,
-      editingCategoryId,
-      editingCategoryName,
-      startEditing,
-      cancelEditing,
-      saveEditingCategory,
+      TYPE_NAME_MAX,
+      // 種別ドラッグ
+      typeDragFromIndex,
+      onTypeDragStart,
+      onTypeDragOver,
+      onTypeDragEnd,
+      // 種別追加モーダル
+      showAddTypeModal,
+      addTypeName,
+      addTypeError,
+      openAddTypeModal,
+      closeAddTypeModal,
+      submitAddType,
+      // 種別編集モーダル
+      editTypeTarget,
+      editTypeName,
+      editTypeError,
+      showTypeDeleteConfirm,
+      isSavingType,
+      isDeletingType,
+      openEditTypeModal,
+      closeEditTypeModal,
+      submitEditType,
+      submitDeleteType,
+      // 備考モーダル
       memoModalItem,
       memoModalValue,
       openMemoModal,
@@ -744,13 +1140,8 @@ export default defineComponent({
             outline: none;
           }
 
-          &.goal-met {
-            color: #3b82f6;
-          }
-
-          &.goal-missed {
-            color: #ef4444;
-          }
+          &.goal-met { color: #3b82f6; }
+          &.goal-missed { color: #ef4444; }
         }
       }
 
@@ -786,16 +1177,9 @@ export default defineComponent({
       gap: 6px;
 
       .balance-inputs-row {
-        padding-left: 18px; // ドット(10px) + gap(8px) 分インデント
+        padding-left: 18px;
 
-        .input-wrapper .amount-input {
-          width: 130px;
-        }
-
-        .memo-input {
-          flex: 1;
-          width: auto;
-        }
+        .input-wrapper .amount-input { width: 130px; }
       }
     }
   }
@@ -819,7 +1203,43 @@ export default defineComponent({
     }
   }
 
-  // 前月・次月ナビゲーション
+  .type-totals {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .type-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+
+  .type-total-label {
+    color: #666;
+  }
+
+  .type-total-amount {
+    font-weight: 600;
+    color: #2c3e50;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    &.type-met   { color: #3b82f6; }
+    &.type-unmet { color: #ef4444; }
+  }
+
+  .type-total-diff {
+    font-size: 11px;
+    font-weight: normal;
+
+    &.diff-positive { color: #3b82f6; }
+    &.diff-negative { color: #ef4444; }
+  }
+
   .month-nav {
     display: flex;
     justify-content: space-between;
@@ -850,7 +1270,6 @@ export default defineComponent({
     }
   }
 
-  /* カラーピッカー共通 */
   .color-picker-label {
     position: relative;
     display: inline-flex;
@@ -859,16 +1278,14 @@ export default defineComponent({
     flex-shrink: 0;
 
     .color-swatch {
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       border: 2px solid rgba(0, 0, 0, 0.12);
       display: block;
       transition: transform 0.15s;
 
-      &:hover {
-        transform: scale(1.15);
-      }
+      &:hover { transform: scale(1.15); }
     }
 
     .color-input {
@@ -907,9 +1324,15 @@ export default defineComponent({
         user-select: none;
         flex-shrink: 0;
 
-        &:active {
-          cursor: grabbing;
-        }
+        &:active { cursor: grabbing; }
+      }
+
+      .color-swatch-display {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid rgba(0, 0, 0, 0.1);
+        flex-shrink: 0;
       }
 
       .category-name {
@@ -927,6 +1350,16 @@ export default defineComponent({
         border-radius: 4px;
         outline: none;
         min-width: 0;
+      }
+
+      .type-badge {
+        font-size: 11px;
+        color: #888;
+        background: #f0f2f5;
+        border-radius: 10px;
+        padding: 2px 8px;
+        white-space: nowrap;
+        flex-shrink: 0;
       }
 
       .edit-name-btn {
@@ -955,6 +1388,7 @@ export default defineComponent({
         padding: 2px 6px;
         border-radius: 4px;
         transition: color 0.2s, background 0.2s;
+        flex-shrink: 0;
 
         &:hover {
           color: #e15759;
@@ -979,6 +1413,21 @@ export default defineComponent({
       color: #e15759;
       font-weight: 500;
     }
+  }
+
+  .add-category-btn {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    color: #4169b0;
+    background: none;
+    border: 1.5px dashed #4169b0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 4px;
+
+    &:hover { background: #eef2fb; }
   }
 
   .add-category {
@@ -1010,9 +1459,7 @@ export default defineComponent({
       transition: background-color 0.2s;
       white-space: nowrap;
 
-      &:hover:not(:disabled) {
-        background-color: #4a8742;
-      }
+      &:hover:not(:disabled) { background-color: #4a8742; }
 
       &:disabled {
         background-color: #a8d0a2;
@@ -1098,9 +1545,7 @@ export default defineComponent({
   cursor: pointer;
   padding: 4px;
 
-  &:hover {
-    color: #333;
-  }
+  &:hover { color: #333; }
 }
 
 .modal-body {
@@ -1108,6 +1553,156 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.form-input {
+  padding: 9px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+
+  &:focus {
+    border-color: #4169b0;
+    outline: none;
+  }
+}
+
+.form-select {
+  padding: 9px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+
+  &:focus {
+    border-color: #4169b0;
+    outline: none;
+  }
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-code {
+  font-size: 13px;
+  color: #666;
+  font-family: monospace;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal-cancel-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  color: #666;
+  cursor: pointer;
+
+  &:hover { background: #f5f5f5; }
+}
+
+.modal-save-btn {
+  padding: 8px 20px;
+  font-size: 14px;
+  background: #4169b0;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+
+  &:hover:not(:disabled) { background: #325090; }
+
+  &:disabled {
+    background: #a0b4d8;
+    cursor: not-allowed;
+  }
+}
+
+.delete-divider {
+  height: 1px;
+  background: #eee;
+  margin: 4px 0;
+}
+
+.delete-action {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.modal-delete-btn {
+  background: none;
+  border: none;
+  color: #e15759;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
+
+  &:hover { color: #c0392b; }
+}
+
+.delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.delete-warn {
+  font-size: 13px;
+  color: #e15759;
+  background: #fff0f0;
+  border: 1px solid #f5c6c6;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.delete-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal-delete-confirm-btn {
+  padding: 8px 20px;
+  font-size: 14px;
+  background: #e15759;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+
+  &:hover:not(:disabled) { background: #c0392b; }
+
+  &:disabled {
+    background: #f0a0a0;
+    cursor: not-allowed;
+  }
 }
 
 .memo-textarea {
@@ -1143,9 +1738,7 @@ export default defineComponent({
   color: #666;
   cursor: pointer;
 
-  &:hover {
-    background: #f5f5f5;
-  }
+  &:hover { background: #f5f5f5; }
 }
 
 .memo-modal-save {
@@ -1158,9 +1751,7 @@ export default defineComponent({
   cursor: pointer;
   font-weight: 600;
 
-  &:hover {
-    background: #325090;
-  }
+  &:hover { background: #325090; }
 }
 
 .help-section {

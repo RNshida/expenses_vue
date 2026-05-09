@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import ExpensesSummary from '../views/expenses/expenses-summary/ExpensesSummary.vue'
 import InputView from '../views/expenses/input/InputView.vue'
 import LoginView from '../views/auth/LoginView.vue'
+import ForgotPasswordView from '../views/auth/ForgotPasswordView.vue'
+import ResetPasswordView from '../views/auth/ResetPasswordView.vue'
 import GoalView from '../views/expenses/goal/GoalView.vue'
 import FurusatoView from '../views/furusato/FurusatoView.vue'
 import MyPageView from '../views/mypage/MyPageView.vue'
@@ -14,6 +16,16 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginView,
+    },
+    {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: ForgotPasswordView,
+    },
+    {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: ResetPasswordView,
     },
     {
       path: '/',
@@ -50,6 +62,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const authStore = useAuthStore()
+  authStore.checkSession()
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return '/login'
   }

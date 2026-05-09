@@ -7,6 +7,14 @@ export interface Category {
   name: string
   color: string | null
   displayOrder: number | null
+  categoryTypeId: number | null
+  categoryTypeName: string | null
+}
+
+export interface CategoryType {
+  id: number
+  name: string
+  displayOrder: number | null
 }
 
 export interface BalanceSummarySeriesItem {
@@ -45,8 +53,10 @@ function parseErrorMessage(text: string, fallback: string, status?: number): str
 
 export const useBalanceStore = defineStore('balance', () => {
   const categories = ref<Category[]>([])
+  const categoryTypes = ref<CategoryType[]>([])
   const summary = ref<BalanceSummaryResponse>({ months: [], series: [] })
   const inputBalances = ref<BalanceInputItem[]>([])
+  const prevInputBalances = ref<BalanceInputItem[]>([])
 
   function h(): Record<string, string> {
     return useAuthStore().authHeaders()
@@ -58,11 +68,78 @@ export const useBalanceStore = defineStore('balance', () => {
     categories.value = await response.json()
   }
 
-  async function addCategory(name: string, color: string): Promise<Category> {
+  async function fetchCategoryTypes(): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/category-types`, { headers: h() })
+    if (!response.ok) throw new Error('種別の取得に失敗しました')
+    categoryTypes.value = await response.json()
+  }
+
+  async function addCategoryType(name: string): Promise<CategoryType> {
+    const response = await fetch(`${API_BASE}/api/category-types`, {
+      method: 'POST',
+      headers: h(),
+      body: JSON.stringify({ name }),
+    })
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(parseErrorMessage(text, '種別の追加に失敗しました', response.status))
+    }
+    const newType: CategoryType = await response.json()
+    categoryTypes.value.push(newType)
+    return newType
+  }
+
+  async function updateCategoryType(id: number, name: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/category-types/${id}`, {
+      method: 'PUT',
+      headers: h(),
+      body: JSON.stringify({ name }),
+    })
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(parseErrorMessage(text, '種別の更新に失敗しました', response.status))
+    }
+    const updated: CategoryType = await response.json()
+    const index = categoryTypes.value.findIndex((t) => t.id === id)
+    if (index !== -1) categoryTypes.value[index] = updated
+  }
+
+  async function deleteCategoryType(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/category-types/${id}`, {
+      method: 'DELETE',
+      headers: h(),
+    })
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(parseErrorMessage(text, '種別の削除に失敗しました', response.status))
+    }
+    categoryTypes.value = categoryTypes.value.filter((t) => t.id !== id)
+    categories.value.forEach((c) => {
+      if (c.categoryTypeId === id) {
+        c.categoryTypeId = null
+        c.categoryTypeName = null
+      }
+    })
+  }
+
+  async function reorderCategoryTypes(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/category-types/reorder`, {
+      method: 'PUT',
+      headers: h(),
+      body: JSON.stringify({ orders }),
+    })
+    if (!response.ok) throw new Error('種別の並び替えに失敗しました')
+    orders.forEach(({ id, displayOrder }) => {
+      const t = categoryTypes.value.find((t) => t.id === id)
+      if (t) t.displayOrder = displayOrder
+    })
+  }
+
+  async function addCategory(name: string, color: string, categoryTypeId?: number | null): Promise<Category> {
     const response = await fetch(`${API_BASE}/api/categories`, {
       method: 'POST',
       headers: h(),
-      body: JSON.stringify({ name, color }),
+      body: JSON.stringify({ name, color, categoryTypeId: categoryTypeId ?? null }),
     })
     if (!response.ok) {
       const text = await response.text().catch(() => '')
@@ -73,11 +150,11 @@ export const useBalanceStore = defineStore('balance', () => {
     return newCategory
   }
 
-  async function updateCategory(id: number, name: string, color: string): Promise<void> {
+  async function updateCategory(id: number, name: string, color: string, categoryTypeId?: number | null): Promise<void> {
     const response = await fetch(`${API_BASE}/api/categories/${id}`, {
       method: 'PUT',
       headers: h(),
-      body: JSON.stringify({ name, color }),
+      body: JSON.stringify({ name, color, categoryTypeId: categoryTypeId ?? null }),
     })
     if (!response.ok) {
       const text = await response.text().catch(() => '')
@@ -117,6 +194,17 @@ export const useBalanceStore = defineStore('balance', () => {
     inputBalances.value = await response.json()
   }
 
+  async function fetchPrevInputBalances(yearMonth: string): Promise<void> {
+    const [year, month] = yearMonth.split('-').map(Number)
+    const d = new Date(year, month - 2, 1)
+    const prev = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const response = await fetch(`${API_BASE}/api/balances/input?yearMonth=${prev}`, {
+      headers: h(),
+    })
+    if (!response.ok) { prevInputBalances.value = []; return }
+    prevInputBalances.value = await response.json()
+  }
+
   async function reorderCategories(orders: { id: number; displayOrder: number }[]): Promise<void> {
     const response = await fetch(`${API_BASE}/api/categories/reorder`, {
       method: 'PUT',
@@ -145,15 +233,23 @@ export const useBalanceStore = defineStore('balance', () => {
 
   return {
     categories,
+    categoryTypes,
     summary,
     inputBalances,
+    prevInputBalances,
+    fetchPrevInputBalances,
     fetchCategories,
+    fetchCategoryTypes,
     addCategory,
     updateCategory,
     deleteCategory,
+    reorderCategories,
+    addCategoryType,
+    updateCategoryType,
+    deleteCategoryType,
+    reorderCategoryTypes,
     fetchSummary,
     fetchInputBalances,
-    reorderCategories,
     saveBalances,
   }
 })

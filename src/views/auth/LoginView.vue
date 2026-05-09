@@ -90,6 +90,12 @@ function switchMode() {
                 {{ mode === 'login' ? 'ユーザー登録' : 'ログイン' }}
               </button>
             </p>
+
+            <p v-if="mode === 'login'" class="forgot-password-text">
+              <button class="link-btn" @click="router.push('/forgot-password')">
+                パスワードをお忘れの方はこちら
+              </button>
+            </p>
           </div>
         </Transition>
       </div>
@@ -101,8 +107,9 @@ function switchMode() {
 .login-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 80px;
   background-color: #f4f6f9;
 }
 
@@ -203,6 +210,13 @@ function switchMode() {
   margin-top: 20px;
   font-size: 13px;
   color: #7f8c8d;
+}
+
+.forgot-password-text {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #aaa;
 }
 
 .link-btn {

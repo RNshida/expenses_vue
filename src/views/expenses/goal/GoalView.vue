@@ -1,43 +1,31 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useGoalStore } from '@/stores/goalStore'
+import { useGoalStore, type GoalPeriod } from '@/stores/goalStore'
 import { useBalanceStore } from '@/stores/balanceStore'
 
 const goalStore = useGoalStore()
 const balanceStore = useBalanceStore()
 
-const AMOUNT_MAX = 9999999999999
-
-function clampGoalAmount(goal: { targetAmount: number | null }, e: Event) {
-  const val = Math.floor(Number((e.target as HTMLInputElement).value))
-  if (isNaN(val) || val < 0) {
-    goal.targetAmount = null
-  } else if (val > AMOUNT_MAX) {
-    goal.targetAmount = AMOUNT_MAX
-    ;(e.target as HTMLInputElement).value = String(AMOUNT_MAX)
-  } else {
-    goal.targetAmount = val
-  }
-}
-
 const isLoading = ref(false)
-const isSaving = ref(false)
-const successMessage = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
 const showHelp = ref(false)
 
-// 編集用のローカルコピー
-const localGoals = ref<{ categoryId: number; categoryName: string; targetAmount: number | null }[]>([])
+// 目標設定モーダル
+const showGoalModal = ref(false)
+const modalTypeId = ref<number | null>(null)
+const modalTypeName = ref('')
+const modalPeriods = ref<(Omit<GoalPeriod, 'id'> & { id: number | null })[]>([])
+const modalSaving = ref(false)
+const modalError = ref<string | null>(null)
+const modalSuccess = ref<string | null>(null)
 
 onMounted(async () => {
   isLoading.value = true
   try {
-    await Promise.all([balanceStore.fetchCategories(), goalStore.fetchGoals()])
-    localGoals.value = goalStore.goals.map((g) => ({
-      categoryId: g.categoryId,
-      categoryName: g.categoryName,
-      targetAmount: g.targetAmount,
-    }))
+    await Promise.all([
+      balanceStore.fetchCategoryTypes(),
+      goalStore.fetchTypeGoalPeriods(),
+    ])
   } catch (e) {
     errorMessage.value = e instanceof Error ? e.message : 'データの取得に失敗しました'
   } finally {
@@ -45,25 +33,86 @@ onMounted(async () => {
   }
 })
 
-async function save() {
-  isSaving.value = true
-  successMessage.value = null
-  errorMessage.value = null
+function openGoalModal(categoryTypeId: number, categoryTypeName: string) {
+  modalTypeId.value = categoryTypeId
+  modalTypeName.value = categoryTypeName
+  const item = goalStore.typeGoalPeriods.find((t) => t.categoryTypeId === categoryTypeId)
+  modalPeriods.value = item
+    ? item.periods.map((p) => ({ ...p }))
+    : []
+  modalError.value = null
+  modalSuccess.value = null
+  showGoalModal.value = true
+}
+
+function addPeriod() {
+  modalPeriods.value.push({ id: null, startYearMonth: '', endYearMonth: '', targetAmount: 0 })
+}
+
+function removePeriod(index: number) {
+  modalPeriods.value.splice(index, 1)
+}
+
+function clampAmount(period: { targetAmount: number }, e: Event) {
+  const val = Math.floor(Number((e.target as HTMLInputElement).value))
+  period.targetAmount = isNaN(val) || val < 0 ? 0 : Math.min(val, 9999999999999)
+}
+
+function validatePeriods(): string | null {
+  for (let i = 0; i < modalPeriods.value.length; i++) {
+    const p = modalPeriods.value[i]
+    if (p.startYearMonth && p.endYearMonth && p.startYearMonth > p.endYearMonth) {
+      return `期間${i + 1}：開始年月が終了年月より後になっています`
+    }
+    if (!p.targetAmount || p.targetAmount <= 0) return `期間${i + 1}：目標金額を入力してください`
+  }
+  // 期間の重複チェック（nullは無限として扱う）
+  const start = (p: { startYearMonth: string }) => p.startYearMonth || '0000-01'
+  const end = (p: { endYearMonth: string }) => p.endYearMonth || '9999-12'
+  for (let i = 0; i < modalPeriods.value.length; i++) {
+    for (let j = i + 1; j < modalPeriods.value.length; j++) {
+      const a = modalPeriods.value[i]
+      const b = modalPeriods.value[j]
+      if (start(a) <= end(b) && start(b) <= end(a)) {
+        return `期間${i + 1}と期間${j + 1}が重複しています`
+      }
+    }
+  }
+  return null
+}
+
+async function saveGoalModal() {
+  modalError.value = null
+  const err = validatePeriods()
+  if (err) { modalError.value = err; return }
+
+  modalSaving.value = true
   try {
-    await goalStore.saveGoals(
-      localGoals.value.map((g) => ({
-        categoryId: g.categoryId,
-        targetAmount: g.targetAmount && g.targetAmount > 0 ? g.targetAmount : null,
+    await goalStore.saveTypeGoalPeriods(
+      modalTypeId.value!,
+      modalPeriods.value.map((p) => ({
+        startYearMonth: p.startYearMonth,
+        endYearMonth: p.endYearMonth,
+        targetAmount: p.targetAmount,
       })),
     )
-    await goalStore.fetchGoals()
-    successMessage.value = '目標を保存しました'
-    setTimeout(() => (successMessage.value = null), 3000)
+    await goalStore.fetchTypeGoalPeriods()
+    modalSuccess.value = '保存しました'
+    setTimeout(() => {
+      showGoalModal.value = false
+      modalSuccess.value = null
+    }, 800)
   } catch (e) {
-    errorMessage.value = e instanceof Error ? e.message : '保存に失敗しました'
+    modalError.value = e instanceof Error ? e.message : '保存に失敗しました'
   } finally {
-    isSaving.value = false
+    modalSaving.value = false
   }
+}
+
+function periodSummary(categoryTypeId: number): string {
+  const item = goalStore.typeGoalPeriods.find((t) => t.categoryTypeId === categoryTypeId)
+  if (!item || item.periods.length === 0) return '未設定'
+  return `${item.periods.length}件の期間目標`
 }
 </script>
 
@@ -76,47 +125,96 @@ async function save() {
 
     <div class="goal-card">
       <p class="description">
-        カテゴリごとに毎月の目標残高を設定します。<br />
-        入力後「保存」ボタンを押してください。
+        種別ごとに期間を指定して目標残高増加額を設定します。
       </p>
 
       <div v-if="isLoading" class="loading">読み込み中...</div>
 
-      <div v-else-if="localGoals.length === 0" class="empty-message">
-        カテゴリが登録されていません。残高入力画面のカテゴリ管理から登録してください。
+      <div v-else-if="goalStore.typeGoalPeriods.length === 0" class="empty-message">
+        種別が登録されていません。残高入力画面の種別管理から登録してください。
       </div>
 
-      <div v-else>
-        <div class="goal-list">
-          <div v-for="goal in localGoals" :key="goal.categoryId" class="goal-item">
-            <div class="goal-name-row">
-              <span class="category-dot" :style="{ background: balanceStore.categories.find(c => c.id === goal.categoryId)?.color ?? '#ccc' }"></span>
-              <label class="category-name">{{ goal.categoryName }}</label>
+      <div v-else class="goal-list">
+        <div
+          v-for="item in goalStore.typeGoalPeriods"
+          :key="item.categoryTypeId"
+          class="goal-item"
+        >
+          <span class="type-name">{{ item.categoryTypeName }}</span>
+          <span class="period-summary">{{ periodSummary(item.categoryTypeId) }}</span>
+          <button class="set-btn" @click="openGoalModal(item.categoryTypeId, item.categoryTypeName)">
+            目標設定
+          </button>
+        </div>
+      </div>
+
+      <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+    </div>
+
+    <!-- 目標設定モーダル -->
+    <Teleport to="body">
+      <div v-if="showGoalModal" class="modal-overlay" @click.self="showGoalModal = false">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 class="modal-title">{{ modalTypeName }}の目標設定</h2>
+            <button class="modal-close" @click="showGoalModal = false">✕</button>
+          </div>
+          <div class="modal-body">
+            <div v-if="modalPeriods.length === 0" class="no-periods">
+              期間が設定されていません。「期間を追加」から設定してください。
             </div>
-            <div class="goal-input-row">
-              <span class="currency">¥</span>
-              <input
-                type="number"
-                v-model.number="goal.targetAmount"
-                min="0"
-                max="9999999999999"
-                step="1"
-                placeholder="未設定"
-                class="goal-input"
-                @input="clampGoalAmount(goal, $event)"
-              />
+
+            <div v-for="(period, index) in modalPeriods" :key="index" class="period-row">
+              <div class="period-index">{{ index + 1 }}</div>
+              <div class="period-fields">
+                <div class="period-range">
+                  <input
+                    type="month"
+                    v-model="period.startYearMonth"
+                    class="month-input"
+                    title="空白の場合：それ以前すべての期間"
+                  />
+                  <span class="range-sep">〜</span>
+                  <input
+                    type="month"
+                    v-model="period.endYearMonth"
+                    class="month-input"
+                    title="空白の場合：それ以降すべての期間"
+                  />
+                </div>
+                <div class="period-hint">※ 年月を空白にすると無期限（開始：以前すべて／終了：以降すべて）</div>
+                <div class="period-amount">
+                  <span class="currency">¥</span>
+                  <input
+                    type="number"
+                    v-model.number="period.targetAmount"
+                    min="1"
+                    max="9999999999999"
+                    step="1"
+                    class="amount-input"
+                    placeholder="目標金額"
+                    @input="clampAmount(period, $event)"
+                  />
+                </div>
+              </div>
+              <button class="remove-btn" @click="removePeriod(index)" title="削除">✕</button>
+            </div>
+
+            <button class="add-period-btn" @click="addPeriod">＋ 期間を追加</button>
+
+            <div v-if="modalError" class="modal-error">{{ modalError }}</div>
+            <div v-if="modalSuccess" class="modal-success">{{ modalSuccess }}</div>
+
+            <div class="modal-actions">
+              <button class="cancel-btn" @click="showGoalModal = false">キャンセル</button>
+              <button class="save-btn" @click="saveGoalModal" :disabled="modalSaving">
+                {{ modalSaving ? '保存中...' : '保存' }}
+              </button>
             </div>
           </div>
         </div>
-
-        <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
-        <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
-
-        <button class="save-btn" @click="save" :disabled="isSaving">
-          {{ isSaving ? '保存中...' : '保存' }}
-        </button>
       </div>
-    </div>
+    </Teleport>
 
     <!-- ヘルプモーダル -->
     <Teleport to="body">
@@ -129,35 +227,36 @@ async function save() {
           <div class="modal-body">
             <section class="help-section">
               <h3>目標設定とは</h3>
-              <p>カテゴリごとに毎月の目標残高（貯蓄額）を設定できます。</p>
+              <p>種別ごとに期間と目標残高増加額を設定できます。期間ごとに異なる目標を設定することが可能です。</p>
             </section>
             <section class="help-section">
               <h3>残高入力画面での表示</h3>
               <div class="help-item">
-                <span class="badge blue">青枠</span>
-                <span>入力した残高が目標金額に達している場合</span>
+                <span class="badge blue">青字</span>
+                <span>前月比の増加額が目標金額以上の場合</span>
               </div>
               <div class="help-item">
-                <span class="badge red">赤枠</span>
-                <span>入力した残高が目標金額に未達の場合</span>
+                <span class="badge red">赤字</span>
+                <span>前月比の増加額が目標金額未満の場合</span>
               </div>
             </section>
             <section class="help-section">
               <h3>サマリー画面での表示</h3>
               <div class="help-item">
                 <span class="month-label blue-label">2024-01</span>
-                <span>その月のすべての目標が達成されている場合</span>
+                <span>その月のすべての種別目標が達成されている場合</span>
               </div>
               <div class="help-item">
                 <span class="month-label red-label">2024-02</span>
-                <span>その月のいずれかの目標が未達の場合</span>
+                <span>その月のいずれかの種別目標が未達の場合</span>
               </div>
             </section>
             <section class="help-section">
               <h3>注意事項</h3>
               <ul>
-                <li>目標未設定のカテゴリは判定対象外です。</li>
-                <li>残高データのない月は判定されません。</li>
+                <li>目標期間外の月は判定対象外（グレー）です。</li>
+                <li>期間内に一度でもデータが入力された種別が判定対象となります。</li>
+                <li>データのない月は残高0として計算されます。</li>
               </ul>
             </section>
           </div>
@@ -205,11 +304,7 @@ async function save() {
   justify-content: center;
   transition: background 0.2s, color 0.2s;
 }
-
-.help-btn:hover {
-  background: #4169b0;
-  color: #fff;
-}
+.help-btn:hover { background: #4169b0; color: #fff; }
 
 .goal-card {
   background: #fff;
@@ -228,96 +323,42 @@ async function save() {
 .goal-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 20px;
+  gap: 2px;
 }
 
 .goal-item {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 6px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 6px;
   border-bottom: 1px solid #f0f0f0;
 }
 
-.goal-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.category-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.category-name {
+.type-name {
   font-size: 14px;
   color: #333;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 500;
+  flex: 1;
 }
 
-.goal-input-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 18px;
-}
-
-.currency {
-  font-size: 14px;
+.period-summary {
+  font-size: 12px;
   color: #888;
 }
 
-.goal-input {
-  flex: 1;
-  padding: 7px 10px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  text-align: right;
-}
-
-.goal-input:focus {
-  border-color: #4169b0;
-  outline: none;
-}
-
-.save-btn {
-  width: 100%;
-  padding: 11px;
-  background-color: #4169b0;
+.set-btn {
+  padding: 6px 14px;
+  background: #4169b0;
   color: #fff;
   border: none;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background 0.2s;
+  white-space: nowrap;
 }
-
-.save-btn:hover:not(:disabled) {
-  background-color: #325090;
-}
-
-.save-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.success-message {
-  color: #59a14f;
-  background: #f0faf0;
-  border: 1px solid #59a14f;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  margin-bottom: 12px;
-}
+.set-btn:hover { background: #325090; }
 
 .error-message {
   color: #e15759;
@@ -326,17 +367,16 @@ async function save() {
   border-radius: 6px;
   padding: 8px 14px;
   font-size: 13px;
-  margin-bottom: 12px;
+  margin-top: 12px;
 }
 
-.loading,
-.empty-message {
+.loading, .empty-message {
   color: #888;
   font-size: 13px;
   padding: 16px 0;
 }
 
-/* モーダル */
+/* モーダル共通 */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -352,8 +392,8 @@ async function save() {
   background: #fff;
   border-radius: 12px;
   width: 100%;
-  max-width: 480px;
-  max-height: 80vh;
+  max-width: 520px;
+  max-height: 85vh;
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
 }
@@ -363,6 +403,10 @@ async function save() {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px 0;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
 }
 
 .modal-title {
@@ -380,39 +424,176 @@ async function save() {
   cursor: pointer;
   padding: 4px;
 }
-
-.modal-close:hover {
-  color: #333;
-}
+.modal-close:hover { color: #333; }
 
 .modal-body {
   padding: 16px 24px 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
-.help-section h3 {
+.no-periods {
+  font-size: 13px;
+  color: #999;
+  padding: 8px 0;
+}
+
+/* 期間行 */
+.period-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  background: #f8f9fb;
+  border-radius: 8px;
+  border: 1px solid #e8eaf0;
+}
+
+.period-index {
+  width: 20px;
+  font-size: 12px;
+  color: #888;
+  font-weight: 600;
+  padding-top: 8px;
+  flex-shrink: 0;
+}
+
+.period-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.period-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.month-input {
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 13px;
+  min-width: 0;
+}
+.month-input:focus { border-color: #4169b0; outline: none; }
+
+.range-sep {
+  font-size: 13px;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.period-hint {
+  font-size: 11px;
+  color: #aaa;
+}
+
+.period-amount {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.currency {
+  font-size: 13px;
+  color: #888;
+}
+
+.amount-input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: right;
+}
+.amount-input:focus { border-color: #4169b0; outline: none; }
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: #bbb;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.remove-btn:hover { color: #e15759; }
+
+.add-period-btn {
+  padding: 8px 14px;
+  background: #f0f4ff;
+  color: #4169b0;
+  border: 1px dashed #4169b0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.add-period-btn:hover { background: #dde6ff; }
+
+.modal-error {
+  color: #e15759;
+  background: #fff0f0;
+  border: 1px solid #e15759;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.modal-success {
+  color: #59a14f;
+  background: #f0faf0;
+  border: 1px solid #59a14f;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.cancel-btn {
+  padding: 9px 20px;
+  background: #f0f0f0;
+  color: #555;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.cancel-btn:hover { background: #e0e0e0; }
+
+.save-btn {
+  padding: 9px 24px;
+  background: #4169b0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
-  margin: 0 0 10px;
+  cursor: pointer;
+  transition: background 0.2s;
 }
+.save-btn:hover:not(:disabled) { background: #325090; }
+.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.help-section p {
-  font-size: 13px;
-  color: #555;
-  margin: 0;
-  line-height: 1.6;
-}
-
-.help-section ul {
-  margin: 0;
-  padding-left: 20px;
-  font-size: 13px;
-  color: #555;
-  line-height: 1.8;
-}
+/* ヘルプモーダル */
+.help-section h3 { font-size: 14px; font-weight: 600; color: #2c3e50; margin: 0 0 10px; }
+.help-section p { font-size: 13px; color: #555; margin: 0; line-height: 1.6; }
+.help-section ul { margin: 0; padding-left: 20px; font-size: 13px; color: #555; line-height: 1.8; }
 
 .help-item {
   display: flex;
@@ -431,18 +612,8 @@ async function save() {
   flex-shrink: 0;
   border: 2px solid;
 }
-
-.badge.blue {
-  color: #3b82f6;
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.06);
-}
-
-.badge.red {
-  color: #ef4444;
-  border-color: #ef4444;
-  background: rgba(239, 68, 68, 0.06);
-}
+.badge.blue { color: #3b82f6; border-color: #3b82f6; background: rgba(59,130,246,0.06); }
+.badge.red  { color: #ef4444; border-color: #ef4444; background: rgba(239,68,68,0.06); }
 
 .month-label {
   font-size: 12px;
@@ -451,14 +622,6 @@ async function save() {
   border-radius: 3px;
   flex-shrink: 0;
 }
-
-.month-label.blue-label {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.month-label.red-label {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
-}
+.month-label.blue-label { color: #3b82f6; background: rgba(59,130,246,0.08); }
+.month-label.red-label  { color: #ef4444; background: rgba(239,68,68,0.08); }
 </style>

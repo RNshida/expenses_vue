@@ -3,24 +3,50 @@ import { ref, computed } from 'vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
+// セッション有効期間: 30分
+const SESSION_DURATION_MS = 30 * 60 * 1000
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
   const email = ref<string | null>(localStorage.getItem('userEmail'))
+  const sessionExpiry = ref<number | null>(
+    localStorage.getItem('sessionExpiry') ? Number(localStorage.getItem('sessionExpiry')) : null,
+  )
 
   const isAuthenticated = computed(() => !!token.value)
 
   function setAuth(newToken: string, userEmail: string) {
+    const expiry = Date.now() + SESSION_DURATION_MS
     token.value = newToken
     email.value = userEmail
+    sessionExpiry.value = expiry
     localStorage.setItem('token', newToken)
     localStorage.setItem('userEmail', userEmail)
+    localStorage.setItem('sessionExpiry', String(expiry))
   }
 
   function logout() {
     token.value = null
     email.value = null
+    sessionExpiry.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('userEmail')
+    localStorage.removeItem('sessionExpiry')
+  }
+
+  // ログイン済みの場合、セッション期限をチェックして期限切れなら自動ログアウト
+  function checkSession(): void {
+    if (!token.value) return
+    if (sessionExpiry.value === null) {
+      // 旧セッション（有効期限未設定）は今から30分に設定
+      const expiry = Date.now() + SESSION_DURATION_MS
+      sessionExpiry.value = expiry
+      localStorage.setItem('sessionExpiry', String(expiry))
+      return
+    }
+    if (Date.now() > sessionExpiry.value) {
+      logout()
+    }
   }
 
   function authHeaders(): Record<string, string> {
@@ -98,5 +124,5 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { token, email, isAuthenticated, authHeaders, register, login, logout, updateEmail, updatePassword }
+  return { token, email, isAuthenticated, authHeaders, register, login, logout, checkSession, updateEmail, updatePassword }
 })

@@ -114,6 +114,63 @@
       }
     }
 
+    .balance-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .type-pie-card {
+      background: #fff;
+      border: 1px solid #e8eef3;
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      .pie-wrap {
+        width: 80px;
+        height: 80px;
+        flex-shrink: 0;
+
+        canvas {
+          width: 100% !important;
+          height: 100% !important;
+        }
+      }
+
+      .pie-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .pie-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .pie-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .pie-label {
+        font-size: 11px;
+        color: #555;
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
     .balance-mini-card {
       background: #fff;
       border: 1px solid #e8eef3;
