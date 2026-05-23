@@ -5,6 +5,7 @@ import LoginView from '../views/auth/LoginView.vue'
 import ForgotPasswordView from '../views/auth/ForgotPasswordView.vue'
 import ResetPasswordView from '../views/auth/ResetPasswordView.vue'
 import GoalView from '../views/expenses/goal/GoalView.vue'
+import AnalysisView from '../views/expenses/analysis/AnalysisView.vue'
 import FurusatoView from '../views/furusato/FurusatoView.vue'
 import MyPageView from '../views/mypage/MyPageView.vue'
 import { useAuthStore } from '../stores/authStore'
@@ -43,6 +44,12 @@ const router = createRouter({
       path: '/goal',
       name: 'goal',
       component: GoalView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/analysis',
+      name: 'analysis',
+      component: AnalysisView,
       meta: { requiresAuth: true },
     },
     {

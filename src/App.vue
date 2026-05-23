@@ -9,7 +9,7 @@ const route = useRoute()
 const menuOpen = ref(false)
 
 const isBalanceSection = computed(() =>
-  ['/', '/input', '/goal'].includes(route.path),
+  ['/', '/input', '/goal', '/analysis'].includes(route.path),
 )
 
 const sectionTitle = computed(() => {
@@ -44,6 +44,9 @@ function goTo(path: string) {
           </RouterLink>
           <RouterLink to="/goal" class="nav-tab" active-class="nav-tab--active">
             目標設定
+          </RouterLink>
+          <RouterLink to="/analysis" class="nav-tab" active-class="nav-tab--active">
+            分析
           </RouterLink>
         </nav>
 
@@ -138,6 +141,9 @@ function goTo(path: string) {
   align-items: stretch;
   height: 100%;
   flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
 }
 
 .nav-tab {
@@ -203,9 +209,13 @@ function goTo(path: string) {
     gap: 8px;
   }
 
+  .app-title {
+    display: none;
+  }
+
   .nav-tab {
-    padding: 0 10px;
-    font-size: 12px;
+    padding: 0 12px;
+    font-size: 13px;
   }
 
   .main-content {
