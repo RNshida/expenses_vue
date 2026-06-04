@@ -1,0 +1,21 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="32" height="32" rx="8" fill="#e3f2fd"/>
+  <!-- 屋根 -->
+  <polygon points="16,4 28,14 4,14" fill="#1976d2"/>
+  <!-- 壁 -->
+  <rect x="7" y="14" width="18" height="14" rx="1" fill="#42a5f5"/>
+  <!-- ドア -->
+  <rect x="13" y="19" width="6" height="9" rx="1" fill="#1565c0"/>
+  <!-- コイン（金色の円） -->
+  <circle cx="25" cy="8" r="5.5" fill="#f9c74f" stroke="#f0a500" stroke-width="1"/>
+  <!-- ¥マーク（パスで描画） -->
+  <!-- 上の∧部分 -->
+  <line x1="23" y1="5.5" x2="25" y2="8.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="27" y1="5.5" x2="25" y2="8.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+  <!-- 横線2本 -->
+  <line x1="22.5" y1="8.5" x2="27.5" y2="8.5" stroke="white" stroke-width="1.1" stroke-linecap="round"/>
+  <line x1="22.5" y1="10"  x2="27.5" y2="10"  stroke="white" stroke-width="1.1" stroke-linecap="round"/>
+  <!-- 縦線 -->
+  <line x1="25" y1="8.5" x2="25" y2="12.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

@@ -79,7 +79,14 @@
 
         <div class="total-row">
           <span class="total-label">合計</span>
-          <span class="total-amount">¥{{ totalAmount.toLocaleString('ja-JP') }}</span>
+          <div class="total-right">
+            <span class="total-amount">¥{{ totalAmount.toLocaleString('ja-JP') }}</span>
+            <span
+              v-if="totalDiff !== null"
+              class="total-diff"
+              :class="totalDiff >= 0 ? 'total-diff-positive' : 'total-diff-negative'"
+            >{{ totalDiff >= 0 ? '+' : '' }}{{ totalDiff.toLocaleString('ja-JP') }}（前月比）</span>
+          </div>
         </div>
 
         <div v-if="saveSuccessMessage" class="success-message">{{ saveSuccessMessage }}</div>
@@ -535,6 +542,14 @@ export default defineComponent({
       store.inputBalances.reduce((sum, item) => sum + (item.amount ?? 0), 0),
     )
 
+    const prevTotalAmount = computed(() =>
+      store.prevInputBalances.reduce((sum, item) => sum + (item.amount ?? 0), 0),
+    )
+
+    const totalDiff = computed(() =>
+      store.prevInputBalances.length > 0 ? totalAmount.value - prevTotalAmount.value : null,
+    )
+
     // 種別ごとの合計と目標達成状況
     const typeBalanceSummary = computed(() => {
       const typeMap = new Map<number, { typeName: string; total: number; prevTotal: number }>()
@@ -910,6 +925,7 @@ export default defineComponent({
       categoryErrorMessage,
       typeErrorMessage,
       totalAmount,
+      totalDiff,
       typeBalanceSummary,
       yearMonthOptions,
       canGoNext,
@@ -1196,10 +1212,25 @@ export default defineComponent({
       color: #2c3e50;
     }
 
+    .total-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
     .total-amount {
       font-size: 16px;
       font-weight: bold;
       color: #2c3e50;
+    }
+
+    .total-diff {
+      font-size: 12px;
+      font-weight: 500;
+
+      &.total-diff-positive { color: #3b82f6; }
+      &.total-diff-negative { color: #ef4444; }
     }
   }
 

@@ -152,7 +152,7 @@ export function useExpensesSummary() {
       typeMap.get(cat.categoryTypeId)!.amount += amount
     }
 
-    return Array.from(typeMap.entries())
+    const items = Array.from(typeMap.entries())
       .filter(([, v]) => v.amount > 0)
       .map(([typeId, v]) => ({
         typeId,
@@ -160,6 +160,11 @@ export function useExpensesSummary() {
         amount: v.amount,
         color: PIE_COLORS[v.colorIndex % PIE_COLORS.length],
       }))
+    const total = items.reduce((s, i) => s + i.amount, 0)
+    return items.map(i => ({
+      ...i,
+      percent: total > 0 ? (i.amount / total) * 100 : 0,
+    }))
   })
 
   // 種別目標の達成状況を月インデックスで返す（期間ベース）
@@ -266,8 +271,12 @@ export function useExpensesSummary() {
       el.style.opacity = '0'
       return
     }
+    const dataIndex = (tooltip as unknown as { dataPoints?: { dataIndex: number }[] }).dataPoints?.[0]?.dataIndex ?? 0
+    const pieItems = typePieData.value
     const lines = tooltip.body?.flatMap((b) => b.lines) ?? []
-    el.innerHTML = lines.map((l) => `<div>${l}</div>`).join('')
+    const percent = pieItems[dataIndex]?.percent
+    const percentStr = percent !== undefined ? ` (${percent.toFixed(1)}%)` : ''
+    el.innerHTML = lines.map((l) => `<div>${l}${percentStr}</div>`).join('')
 
     const rect = chart.canvas.getBoundingClientRect()
     const x = rect.left + tooltip.caretX

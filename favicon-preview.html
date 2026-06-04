@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ファビコン候補</title>
+<style>
+  body { font-family: sans-serif; background: #f4f6f9; padding: 32px; }
+  h1 { color: #2c3e50; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; max-width: 700px; }
+  .card {
+    background: #fff; border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    cursor: pointer; transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: 0 4px 16px rgba(65,105,176,0.2); }
+  .card svg { width: 64px; height: 64px; }
+  .card .num { font-size: 12px; color: #888; }
+  .card .desc { font-size: 11px; color: #555; text-align: center; line-height: 1.4; }
+</style>
+</head>
+<body>
+<h1>ファビコン候補（32×32想定）</h1>
+<div class="grid">
+
+  <!-- 1: パステル棒グラフ（丸みあり） -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#eef4ff"/>
+      <rect x="4"  y="20" width="6" height="8"  rx="3" fill="#7baee8"/>
+      <rect x="13" y="13" width="6" height="15" rx="3" fill="#4f8fd4"/>
+      <rect x="22" y="6"  width="6" height="22" rx="3" fill="#2e6ab5"/>
+    </svg>
+    <span class="num">①</span>
+    <span class="desc">パステル<br>棒グラフ</span>
+  </div>
+
+  <!-- 2: コイン（¥マーク） -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="15" fill="#f9c74f"/>
+      <circle cx="16" cy="16" r="12" fill="#f8b500"/>
+      <text x="16" y="21" text-anchor="middle" font-size="14" font-weight="bold" fill="white" font-family="sans-serif">¥</text>
+    </svg>
+    <span class="num">②</span>
+    <span class="desc">ゴールドコイン<br>¥マーク</span>
+  </div>
+
+  <!-- 3: 芽・植物（貯蓄の成長） -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#e8f5e9"/>
+      <!-- 茎 -->
+      <line x1="16" y1="26" x2="16" y2="12" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- 左葉 -->
+      <ellipse cx="10" cy="16" rx="6" ry="4" fill="#66bb6a" transform="rotate(-30 10 16)"/>
+      <!-- 右葉 -->
+      <ellipse cx="22" cy="13" rx="6" ry="4" fill="#43a047" transform="rotate(20 22 13)"/>
+      <!-- 鉢 -->
+      <rect x="10" y="24" width="12" height="5" rx="2" fill="#a1887f"/>
+    </svg>
+    <span class="num">③</span>
+    <span class="desc">植物・成長<br>（貯蓄イメージ）</span>
+  </div>
+
+  <!-- 4: お財布 -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#fff3e0"/>
+      <!-- 財布本体 -->
+      <rect x="3" y="10" width="22" height="15" rx="3" fill="#ff9800"/>
+      <!-- 財布フラップ -->
+      <rect x="3" y="10" width="22" height="6"  rx="3" fill="#f57c00"/>
+      <!-- コイン口 -->
+      <rect x="21" y="13" width="8" height="9" rx="4" fill="#ffe0b2" stroke="#ff9800" stroke-width="1.5"/>
+      <!-- コイン口の穴 -->
+      <circle cx="25" cy="17.5" r="2.5" fill="#ff9800"/>
+    </svg>
+    <span class="num">④</span>
+    <span class="desc">お財布<br>オレンジ</span>
+  </div>
+
+  <!-- 5: ハートコイン -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="15" fill="#ff6b9d"/>
+      <circle cx="16" cy="16" r="12" fill="#ff4081"/>
+      <!-- ハート -->
+      <path d="M16 22 C16 22 7 16 7 11 C7 8 9.5 6 12 7.5 C13.5 8.5 16 11 16 11 C16 11 18.5 8.5 20 7.5 C22.5 6 25 8 25 11 C25 16 16 22 16 22Z" fill="white"/>
+    </svg>
+    <span class="num">⑤</span>
+    <span class="desc">ハートコイン<br>ピンク</span>
+  </div>
+
+  <!-- 6: 家 + コイン -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#e3f2fd"/>
+      <!-- 屋根 -->
+      <polygon points="16,4 28,14 4,14" fill="#1976d2"/>
+      <!-- 壁 -->
+      <rect x="7" y="14" width="18" height="14" rx="1" fill="#42a5f5"/>
+      <!-- ドア -->
+      <rect x="13" y="19" width="6" height="9" rx="1" fill="#1565c0"/>
+      <!-- コイン -->
+      <circle cx="24" cy="8" r="5" fill="#f9c74f" stroke="#f0b400" stroke-width="1"/>
+      <text x="24" y="11" text-anchor="middle" font-size="6" font-weight="bold" fill="white" font-family="sans-serif">¥</text>
+    </svg>
+    <span class="num">⑥</span>
+    <span class="desc">家 + コイン<br>ブルー</span>
+  </div>
+
+  <!-- 7: グラデーション円グラフ -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#fafafa"/>
+      <!-- 円グラフ風（扇形） -->
+      <circle cx="16" cy="16" r="12" fill="#e0e0e0"/>
+      <!-- 40%のスライス（水色） -->
+      <path d="M16 16 L16 4 A12 12 0 0 1 26.4 22 Z" fill="#4fc3f7"/>
+      <!-- 35%のスライス（緑） -->
+      <path d="M16 16 L26.4 22 A12 12 0 0 1 5.6 22 Z" fill="#81c784"/>
+      <!-- 25%のスライス（オレンジ） -->
+      <path d="M16 16 L5.6 22 A12 12 0 0 1 16 4 Z" fill="#ffb74d"/>
+      <!-- 中央白抜き -->
+      <circle cx="16" cy="16" r="5" fill="white"/>
+    </svg>
+    <span class="num">⑦</span>
+    <span class="desc">ドーナツ<br>円グラフ</span>
+  </div>
+
+  <!-- 8: キラキラ¥ -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#ede7f6"/>
+      <!-- 大きい¥ -->
+      <text x="16" y="22" text-anchor="middle" font-size="20" font-weight="bold" fill="#7c4dff" font-family="sans-serif">¥</text>
+      <!-- キラキラ星 -->
+      <circle cx="6"  cy="6"  r="2" fill="#ffca28"/>
+      <circle cx="26" cy="5"  r="1.5" fill="#ff8a65"/>
+      <circle cx="27" cy="25" r="1.5" fill="#66bb6a"/>
+      <circle cx="5"  cy="27" r="1" fill="#ff8a65"/>
+    </svg>
+    <span class="num">⑧</span>
+    <span class="desc">キラキラ<br>¥マーク</span>
+  </div>
+
+  <!-- 9: 貯金箱（豚） -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <!-- 体 -->
+      <ellipse cx="16" cy="18" rx="11" ry="9" fill="#f48fb1"/>
+      <!-- 頭 -->
+      <circle cx="25" cy="14" r="6" fill="#f48fb1"/>
+      <!-- 耳 -->
+      <ellipse cx="23" cy="9" rx="2.5" ry="3" fill="#f06292"/>
+      <!-- 鼻 -->
+      <ellipse cx="29" cy="15" rx="3" ry="2.5" fill="#f06292"/>
+      <circle cx="28" cy="15" r="0.8" fill="#c2185b"/>
+      <circle cx="30" cy="15" r="0.8" fill="#c2185b"/>
+      <!-- 目 -->
+      <circle cx="26" cy="12" r="1.2" fill="white"/>
+      <circle cx="26.4" cy="12" r="0.6" fill="#333"/>
+      <!-- コイン投入口 -->
+      <rect x="11" y="9" width="6" height="1.5" rx="0.75" fill="#e91e8c"/>
+      <!-- 足 -->
+      <rect x="7"  y="25" width="4" height="4" rx="2" fill="#f06292"/>
+      <rect x="13" y="25" width="4" height="4" rx="2" fill="#f06292"/>
+      <!-- しっぽ -->
+      <path d="M5 18 Q2 15 4 12" stroke="#f06292" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </svg>
+    <span class="num">⑨</span>
+    <span class="desc">貯金箱<br>ぶた</span>
+  </div>
+
+  <!-- 10: シンプル上向き矢印 -->
+  <div class="card">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#e8f5e9"/>
+      <!-- 棒グラフ2本 -->
+      <rect x="5"  y="20" width="8" height="8" rx="2" fill="#a5d6a7"/>
+      <rect x="19" y="12" width="8" height="16" rx="2" fill="#66bb6a"/>
+      <!-- 上向き矢印 -->
+      <line x1="7" y1="20" x2="22" y2="8" stroke="#2e7d32" stroke-width="2.5" stroke-linecap="round"/>
+      <polyline points="17,7 23,7 23,13" stroke="#2e7d32" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="num">⑩</span>
+    <span class="desc">上昇トレンド<br>グリーン</span>
+  </div>
+
+</div>
+
+<p style="margin-top:24px;color:#888;font-size:13px;">
+  好みの番号を教えてください。色・形は調整できます。
+</p>
+</body>
+</html>

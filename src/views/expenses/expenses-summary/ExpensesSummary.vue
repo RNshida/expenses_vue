@@ -55,6 +55,7 @@
               <div v-for="item in typePieData" :key="item.typeId" class="pie-legend-item">
                 <span class="pie-dot" :style="{ background: item.color }"></span>
                 <span class="pie-label" :title="item.typeName">{{ item.typeName }}</span>
+                <span class="pie-percent">{{ item.percent.toFixed(1) }}%</span>
               </div>
             </div>
           </div>
