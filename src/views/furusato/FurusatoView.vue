@@ -10,6 +10,8 @@ interface FurusatoEntry {
   productName: string
   amount: number
   status: FurusatoStatus
+  donationDate: string | null
+  applicationDate: string | null
 }
 
 const STATUS_OPTIONS: FurusatoStatus[] = [
@@ -211,11 +213,18 @@ function clampProduct(target: 'add' | 'edit', e: Event) {
 
 // ─── 追加フォーム ─────────────────────────────────
 const showAddForm = ref(false)
-const addForm = ref({ municipality: '', productName: '', amount: null as number | null, status: '未申請' as FurusatoStatus })
+const addForm = ref({
+  municipality: '',
+  productName: '',
+  amount: null as number | null,
+  status: '未申請' as FurusatoStatus,
+  donationDate: '' as string,
+  applicationDate: '' as string,
+})
 const addError = ref('')
 
 function openAdd() {
-  addForm.value = { municipality: '', productName: '', amount: null, status: '未申請' }
+  addForm.value = { municipality: '', productName: '', amount: null, status: '未申請', donationDate: '', applicationDate: '' }
   addError.value = ''
   showAddForm.value = true
 }
@@ -236,6 +245,8 @@ async function submitAdd() {
       productName: addForm.value.productName.trim(),
       amount: addForm.value.amount,
       status: addForm.value.status,
+      donationDate: addForm.value.donationDate || null,
+      applicationDate: addForm.value.applicationDate || null,
     })
     showAddForm.value = false
   } catch (e: unknown) {
@@ -247,12 +258,26 @@ async function submitAdd() {
 
 // ─── 編集モーダル ──────────────────────────────────
 const editTarget = ref<FurusatoEntry | null>(null)
-const editForm = ref({ municipality: '', productName: '', amount: null as number | null, status: '未申請' as FurusatoStatus })
+const editForm = ref({
+  municipality: '',
+  productName: '',
+  amount: null as number | null,
+  status: '未申請' as FurusatoStatus,
+  donationDate: '' as string,
+  applicationDate: '' as string,
+})
 const editError = ref('')
 
 function openEdit(entry: FurusatoEntry) {
   editTarget.value = entry
-  editForm.value = { municipality: entry.municipality, productName: entry.productName, amount: entry.amount, status: entry.status }
+  editForm.value = {
+    municipality: entry.municipality,
+    productName: entry.productName,
+    amount: entry.amount,
+    status: entry.status,
+    donationDate: entry.donationDate ?? '',
+    applicationDate: entry.applicationDate ?? '',
+  }
   editError.value = ''
 }
 
@@ -272,6 +297,8 @@ async function submitEdit() {
       productName: editForm.value.productName.trim(),
       amount: editForm.value.amount!,
       status: editForm.value.status,
+      donationDate: editForm.value.donationDate || null,
+      applicationDate: editForm.value.applicationDate || null,
     })
     editTarget.value = null
   } catch (e: unknown) {
@@ -421,6 +448,14 @@ onMounted(() => fetchYear(selectedYear.value))
               <option v-for="s in STATUS_OPTIONS" :key="s" :value="s">{{ s }}</option>
             </select>
           </div>
+          <div class="form-field">
+            <label class="form-label">納税日</label>
+            <input v-model="addForm.donationDate" type="date" class="form-input" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">申請日</label>
+            <input v-model="addForm.applicationDate" type="date" class="form-input" />
+          </div>
         </div>
         <p v-if="addError" class="form-error">{{ addError }}</p>
         <div class="form-actions">
@@ -441,6 +476,11 @@ onMounted(() => fetchYear(selectedYear.value))
             <div class="entry-meta">
               <span class="entry-municipality">{{ entry.municipality }}</span>
               <span v-if="entry.productName" class="entry-product">{{ entry.productName }}</span>
+              <span v-if="entry.donationDate || entry.applicationDate" class="entry-dates">
+                <span v-if="entry.donationDate">納税日: {{ entry.donationDate }}</span>
+                <span v-if="entry.donationDate && entry.applicationDate"> ／ </span>
+                <span v-if="entry.applicationDate">申請日: {{ entry.applicationDate }}</span>
+              </span>
             </div>
             <div class="entry-right">
               <span class="entry-amount">¥{{ entry.amount.toLocaleString('ja-JP') }}</span>
@@ -530,6 +570,14 @@ onMounted(() => fetchYear(selectedYear.value))
                 <select v-model="editForm.status" class="form-select">
                   <option v-for="s in STATUS_OPTIONS" :key="s" :value="s">{{ s }}</option>
                 </select>
+              </div>
+              <div class="form-field">
+                <label class="form-label">納税日</label>
+                <input v-model="editForm.donationDate" type="date" class="form-input" />
+              </div>
+              <div class="form-field">
+                <label class="form-label">申請日</label>
+                <input v-model="editForm.applicationDate" type="date" class="form-input" />
               </div>
             </div>
             <p v-if="editError" class="form-error">{{ editError }}</p>
@@ -920,6 +968,8 @@ onMounted(() => fetchYear(selectedYear.value))
 .entry-municipality { font-size: 14px; font-weight: 600; color: #2c3e50; }
 
 .entry-product { font-size: 12px; color: #888; }
+
+.entry-dates { font-size: 11px; color: #aaa; }
 
 .entry-right {
   display: flex;

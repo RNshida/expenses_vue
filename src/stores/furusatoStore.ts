@@ -9,6 +9,8 @@ export interface FurusatoEntry {
   productName: string
   amount: number
   status: string
+  donationDate: string | null
+  applicationDate: string | null
 }
 
 export interface FurusatoConfig {
@@ -63,7 +65,14 @@ export const useFurusatoStore = defineStore('furusato', () => {
 
   async function addEntry(
     fiscalYear: number,
-    form: { municipality: string; productName: string; amount: number; status: string },
+    form: {
+      municipality: string
+      productName: string
+      amount: number
+      status: string
+      donationDate: string | null
+      applicationDate: string | null
+    },
   ): Promise<FurusatoEntry> {
     const response = await fetch(`${API_BASE}/api/furusato/${fiscalYear}/entries`, {
       method: 'POST',
@@ -81,7 +90,14 @@ export const useFurusatoStore = defineStore('furusato', () => {
 
   async function updateEntry(
     id: number,
-    form: { municipality: string; productName: string; amount: number; status: string },
+    form: {
+      municipality: string
+      productName: string
+      amount: number
+      status: string
+      donationDate: string | null
+      applicationDate: string | null
+    },
   ): Promise<void> {
     const response = await fetch(`${API_BASE}/api/furusato/entries/${id}`, {
       method: 'PUT',
